@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+# control-saigil: drive the SAIGIL app on the Pleos Connect car emulator and capture proof.
+# Usage and the meaning of each command are in SKILL.md next to this file.
+set -euo pipefail
+
+PKG=com.gomsoo.saigil
+ACTIVITY=$PKG/.MainActivity
+PERMISSION=pleos.car.permission.CAR_DOORS
+# The Virtual Console ships only on the Pleos car image, so its package marks the right device.
+CONSOLE_PKG=ai.pleos.connectwebconsole
+CONSOLE_PORT=8088
+READY_TIMEOUT=30
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+REPO=$(git -C "$HERE" rev-parse --show-toplevel)
+ART=$REPO/verify-artifacts
+LOCK=$ART/.run
+APK=$REPO/app/build/outputs/apk/debug/app-debug.apk
+
+SERIAL=
+FWD=
+
+die() { echo "control-saigil: $*" >&2; exit 1; }
+
+is_pleos() {
+    [ -n "$(adb -s "$1" shell pm list packages "$CONSOLE_PKG" 2>/dev/null | tr -d '\r')" ]
+}
+
+# SAIGIL runs only on the car emulator. A phone emulator is refused even when named explicitly.
+resolve_serial() {
+    local s state found="" count=0
+    if [ -n "${SAIGIL_SERIAL:-}" ]; then
+        is_pleos "$SAIGIL_SERIAL" || die "SAIGIL_SERIAL=$SAIGIL_SERIAL is not a Pleos car emulator"
+        SERIAL=$SAIGIL_SERIAL
+        return
+    fi
+    while read -r s state; do
+        [ "$state" = device ] || continue
+        if is_pleos "$s"; then found=$s; count=$((count + 1)); fi
+    done < <(adb devices | tail -n +2)
+    [ "$count" -ge 1 ] || die "no Pleos car emulator is connected (start AVD Pleos_Connect_*)"
+    [ "$count" -eq 1 ] || die "$count Pleos emulators are connected; set SAIGIL_SERIAL to one of them"
+    SERIAL=$found
+}
+
+console_open() {
+    FWD=$(adb -s "$SERIAL" forward tcp:0 "tcp:$CONSOLE_PORT")
+    trap console_close EXIT
+}
+
+console_close() {
+    if [ -n "$FWD" ]; then
+        adb -s "$SERIAL" forward --remove "tcp:$FWD" >/dev/null 2>&1 || true
+        FWD=
+    fi
+}
+
+console_state() { curl -fsS -m 5 "http://127.0.0.1:$FWD/vehicle/state"; }
+
+# door -> true|false for the front-left (driver) door, clients -> open Virtual Console sessions.
+console_field() {
+    console_state | python3 -I -c '
+import json, sys
+j = json.load(sys.stdin)
+print({"door": str(j["body"]["doors"]["front_left"]).lower(),
+       "clients": j["browser"]["clients"]}[sys.argv[1]])' "$1"
+}
+
+# The console rejects writes with {"error":"emulator_inactive"} unless a session heartbeat is live,
+# so hold one for the length of the write. The door state stays after the session closes.
+door_set() {
+    local want=$1 client="verify-saigil-$$" i resp
+    console_open
+    [ "$(console_field clients)" = 0 ] ||
+        die "the Virtual Console is open in another client; not driving a console someone else is using"
+    for i in 1 2 3 4 5 6; do
+        curl -fsS -m 2 -X POST "http://127.0.0.1:$FWD/browser/session?client=$client" >/dev/null
+        [ "$(console_field clients)" = 1 ] && break
+        sleep 0.5
+    done
+    resp=$(curl -sS -m 5 -X PUT "http://127.0.0.1:$FWD/vehicle/body?door_fl=$want")
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        [ "$(console_field door)" = "$want" ] && break
+        curl -fsS -m 2 -X POST "http://127.0.0.1:$FWD/browser/session?client=$client" >/dev/null
+        sleep 0.5
+    done
+    curl -fsS -m 2 -X POST "http://127.0.0.1:$FWD/browser/session?client=$client&closing=1" >/dev/null || true
+    [ "$(console_field door)" = "$want" ] ||
+        die "front-left door did not become $want; console answered: $(printf %s "$resp" | head -c 200)"
+    console_close
+}
+
+# Text of every SAIGIL view on screen, one per line. Empty when SAIGIL is not in the foreground.
+screen_text() {
+    # The dump is one line of XML followed by a status message, so match nodes instead of parsing it.
+    adb -s "$SERIAL" exec-out uiautomator dump /dev/tty 2>/dev/null | python3 -I -c '
+import html, re, sys
+package = "package=\"%s\"" % sys.argv[1]
+for node in re.findall(r"<node [^>]*>", sys.stdin.read()):
+    text = re.search(r" text=\"([^\"]*)\"", node)
+    if package in node and text and text.group(1):
+        print(html.unescape(text.group(1)))' "$PKG"
+}
+
+result_line() { screen_text | grep -E '^(ROW_1_LEFT door position: |Failed: |Loading door position)' || true; }
+
+# Ready means the screen left "Loading door position..." for a result or a failure line.
+wait_ready() {
+    local deadline=$((SECONDS + READY_TIMEOUT)) line
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        line=$(result_line)
+        case $line in
+        "ROW_1_LEFT door position: "* | "Failed: "*) echo "$line"; return 0 ;;
+        esac
+        sleep 1
+    done
+    die "not ready after ${READY_TIMEOUT}s; screen shows: '$(result_line)'"
+}
+
+start_app() {
+    adb -s "$SERIAL" shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+}
+
+run_dir() {
+    [ -f "$LOCK" ] || die "no open run; start one with: control-saigil launch"
+    echo "$ART/$(cat "$LOCK")"
+}
+
+cmd_doctor() {
+    local fail=0 tool avd local_sha device_sha apk_path
+    report() { printf '%-5s %s\n' "$1" "$2"; [ "$1" = FAIL ] && fail=1; return 0; }
+
+    for tool in adb just curl python3; do
+        command -v "$tool" >/dev/null || report FAIL "$tool is not on PATH"
+    done
+    resolve_serial
+    avd=$(adb -s "$SERIAL" emu avd name 2>/dev/null | head -1 | tr -d '\r')
+    report OK "Pleos car emulator $SERIAL (AVD $avd)"
+
+    apk_path=$(adb -s "$SERIAL" shell pm path "$PKG" | sed 's/^package://' | tr -d '\r')
+    if [ -z "$apk_path" ]; then
+        report FAIL "$PKG is not installed; run: control-saigil launch"
+    elif [ ! -f "$APK" ]; then
+        report WARN "no local debug APK to compare the installed build against"
+    else
+        local_sha=$(shasum -a 256 "$APK" | cut -d' ' -f1)
+        device_sha=$(adb -s "$SERIAL" shell sha256sum "$apk_path" | cut -d' ' -f1)
+        if [ "$local_sha" = "$device_sha" ]; then
+            report OK "installed APK matches app/build/outputs/apk/debug/app-debug.apk"
+        else
+            report FAIL "installed APK differs from the local debug APK; run: control-saigil launch"
+        fi
+    fi
+
+    if adb -s "$SERIAL" shell dumpsys package "$PKG" | grep -q "$PERMISSION: granted=true"; then
+        report OK "$PERMISSION granted"
+    else
+        report FAIL "$PERMISSION is not granted"
+    fi
+
+    if adb -s "$SERIAL" shell dumpsys activity activities | grep topResumedActivity | grep -q "$ACTIVITY"; then
+        report OK "$ACTIVITY is in the foreground, screen: '$(result_line)'"
+    else
+        report WARN "$ACTIVITY is not in the foreground; run: control-saigil relaunch"
+    fi
+
+    console_open
+    if console_state >/dev/null 2>&1; then
+        report OK "Virtual Console answers on device port $CONSOLE_PORT, front-left door open=$(console_field door)"
+        [ "$(console_field clients)" = 0 ] ||
+            report WARN "the Virtual Console is open in another client; door commands will refuse"
+    else
+        report FAIL "Virtual Console does not answer on device port $CONSOLE_PORT"
+    fi
+    console_close
+
+    if [ -f "$LOCK" ]; then
+        report OK "open run $(cat "$LOCK"), evidence in $ART/$(cat "$LOCK")"
+    else
+        report OK "no open run"
+    fi
+    return $fail
+}
+
+cmd_launch() {
+    local run dir
+    [ ! -f "$LOCK" ] || die "run $(cat "$LOCK") is still open; finish it with: control-saigil cleanup"
+    resolve_serial
+    mkdir -p "$ART"
+    # Evidence is local proof, not source. The directory ignores itself.
+    [ -f "$ART/.gitignore" ] || echo '*' >"$ART/.gitignore"
+    run=$(date +%Y%m%d-%H%M%S)
+    dir=$ART/$run
+    mkdir "$dir"
+    echo "$run" >"$LOCK"
+
+    console_open
+    console_field door >"$dir/door.orig"
+    console_close
+    adb -s "$SERIAL" shell "date +'%m-%d %H:%M:%S.000'" | tr -d '\r' >"$dir/logcat.since"
+
+    (cd "$REPO" && just install "$SERIAL") >"$dir/install.log" 2>&1 ||
+        die "just install failed; see $dir/install.log"
+    wait_ready
+    echo "run $run on $SERIAL, evidence in $dir"
+}
+
+cmd_relaunch() {
+    resolve_serial
+    adb -s "$SERIAL" shell am force-stop "$PKG"
+    start_app
+    wait_ready
+}
+
+cmd_text() {
+    resolve_serial
+    screen_text
+}
+
+cmd_door() {
+    resolve_serial
+    case ${1:-} in
+    open) run_dir >/dev/null; door_set true; echo "front-left door open=true" ;;
+    close) run_dir >/dev/null; door_set false; echo "front-left door open=false" ;;
+    state) console_open; echo "front-left door open=$(console_field door)"; console_close ;;
+    *) die "usage: control-saigil door open|close|state" ;;
+    esac
+}
+
+cmd_evidence() {
+    local label=${1:-} dir
+    case $label in
+    "" | *[!A-Za-z0-9._-]*) die "usage: control-saigil evidence <label>  (letters, digits, . _ -)" ;;
+    esac
+    dir=$(run_dir)
+    resolve_serial
+    adb -s "$SERIAL" exec-out screencap -p >"$dir/$label.png"
+    adb -s "$SERIAL" exec-out uiautomator dump /dev/tty 2>/dev/null >"$dir/$label.ui.xml"
+    screen_text >"$dir/$label.text.txt"
+    adb -s "$SERIAL" logcat -d -T "$(cat "$dir/logcat.since")" -s SAIGIL:V >"$dir/$label.logcat.txt" 2>&1
+    console_open
+    console_state | python3 -I -c '
+import json, sys
+body = json.load(sys.stdin)["body"]
+json.dump({"doors": body["doors"], "door_locks": body["door_locks"]}, sys.stdout, indent=1)' >"$dir/$label.vehicle.json"
+    console_close
+    echo "$dir/$label.{png,ui.xml,text.txt,logcat.txt,vehicle.json}"
+    echo "screen: $(tr '\n' '|' <"$dir/$label.text.txt")"
+}
+
+cmd_cleanup() {
+    local dir orig
+    if [ ! -f "$LOCK" ]; then
+        echo "no open run; nothing to clean up"
+        return 0
+    fi
+    dir=$ART/$(cat "$LOCK")
+    resolve_serial
+    orig=$(cat "$dir/door.orig" 2>/dev/null || true)
+    if [ -n "$orig" ]; then
+        console_open
+        if [ "$(console_field door)" != "$orig" ]; then
+            console_close
+            door_set "$orig"
+            echo "front-left door restored to open=$orig"
+        fi
+        console_close
+    fi
+    # Stops only the SAIGIL instance this run launched. The app stays installed.
+    adb -s "$SERIAL" shell am force-stop "$PKG"
+    rm -f "$LOCK"
+    echo "run closed, evidence kept in $dir"
+}
+
+case ${1:-} in
+doctor) cmd_doctor ;;
+launch) cmd_launch ;;
+relaunch) cmd_relaunch ;;
+text) cmd_text ;;
+door) cmd_door "${2:-}" ;;
+evidence) cmd_evidence "${2:-}" ;;
+cleanup) cmd_cleanup ;;
+*) die "usage: control-saigil doctor|launch|relaunch|text|door open|close|state|evidence <label>|cleanup" ;;
+esac
