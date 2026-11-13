@@ -52,6 +52,7 @@ import com.gomsoo.saigil.session.Problem
 import com.gomsoo.saigil.session.Restriction
 import com.gomsoo.saigil.session.Role
 import com.gomsoo.saigil.session.Session
+import com.gomsoo.saigil.session.StartField
 import com.gomsoo.saigil.ui.theme.PleosColor
 import com.gomsoo.saigil.ui.theme.PleosType
 
@@ -90,11 +91,11 @@ private fun ScreenFrame(
     Column(Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding()) {
         Box(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-            contentAlignment = Alignment.TopCenter,
+            contentAlignment = Alignment.Center,
         ) {
             Column(
-                Modifier.widthIn(max = 1600.dp).fillMaxWidth().padding(horizontal = 48.dp, vertical = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(32.dp),
+                Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
                 Text(title, style = PleosType.TitleLarge, modifier = Modifier.semantics { heading() })
                 content()
@@ -103,7 +104,7 @@ private fun ScreenFrame(
         if (actions != null) {
             HorizontalDivider(color = PleosColor.Divider)
             FlowRow(
-                Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 24.dp),
+                Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) { actions() }
@@ -148,37 +149,77 @@ private fun Set<Problem>.messageFor(problem: Problem): String? = if (problem in 
 
 @Composable
 private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
+    val titles = listOf("당신과 함께 타는 사람을 알려주세요", "당신을 조금 더 알아볼게요", "함께 타는 사람은 어떤 분인가요?", "출발 전, 안전을 확인해요")
     ScreenFrame(
-        title = stringResource(R.string.start_title),
+        title = titles[start.step],
         actions = {
-            PleosButton(stringResource(R.string.start_quit), { send(Event.Abort) })
-            PleosButton(stringResource(R.string.action_next), { send(Event.Next) }, style = ButtonStyle.Primary)
+            if (start.step > 0) PleosButton("이전", { send(Event.Previous) })
+            else PleosButton(stringResource(R.string.start_quit), { send(Event.Abort) })
+            PleosButton(if (start.step == 3) "이야기 준비하기" else "다음", { send(Event.Next) }, style = ButtonStyle.Primary)
         },
     ) {
-        Image(painterResource(R.drawable.saigil_paths), contentDescription = null, modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(24.dp)), contentScale = ContentScale.Crop)
-        FlowRow(
-            Modifier.selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            listOf(Role.Parent to R.string.role_parent, Role.Child to R.string.role_child).forEach { (role, label) ->
-                ChoiceOption(
-                    text = stringResource(label),
-                    selected = start.role == role,
-                    onSelect = { send(Event.SelectRole(role)) },
-                    modifier = Modifier.widthIn(min = 360.dp),
-                )
+        GrowthProgress(start.step + 1, 4)
+        when (start.step) {
+            0 -> {
+                Text("당신은 누구인가요? 함께 타는 사람과의 관계를 골라 주세요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    listOf(
+                        Role.Parent to "자녀와 함께 타요",
+                        Role.Child to "부모님과 함께 타요",
+                        Role.Partner to "배우자·연인과 함께 타요",
+                        Role.Friend to "친구와 함께 타요",
+                        Role.Other to "다른 소중한 사람과 타요",
+                    ).forEach { (role, label) ->
+                        ChoiceOption(label, start.role == role, { send(Event.SelectRole(role)) }, Modifier.widthIn(min = 340.dp))
+                    }
+                }
+                start.problems.messageFor(Problem.NoRole)?.let { ErrorText(it) }
+            }
+            1 -> {
+                Text("편한 항목만 골라도 괜찮아요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                ProfileChoices("나이대", StartField.MyAge, listOf("10대", "20대", "30대", "40대", "50대 이상"), start, send)
+                ProfileChoices("하는 일", StartField.MyWork, listOf("학생", "직장인", "자영업", "가사·돌봄", "기타"), start, send)
+                ProfileChoices("사는 곳", StartField.MyArea, listOf("같은 집", "가까운 곳", "멀리 떨어져요"), start, send)
+            }
+            2 -> {
+                Text("정확히 몰라도 괜찮아요. 떠오르는 것만 골라 주세요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                ProfileChoices("나이대", StartField.CompanionAge, listOf("10대", "20대", "30대", "40대", "50대 이상"), start, send)
+                ProfileChoices("성별", StartField.CompanionGender, listOf("여성", "남성", "응답하지 않을래요"), start, send)
+                ProfileChoices("평소 모습", StartField.CompanionStyle, listOf("활발한 편", "차분한 편", "잘 모르겠어요"), start, send)
+                ProfileChoices("관심사", StartField.CompanionInterest, listOf("음악", "운동", "여행", "음식", "아직 모르겠어요"), start, send)
+            }
+            else -> {
+                Text("이야기는 차를 세우고, 혼자 있을 때 준비해요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                CheckOption("지금 혼자 있어요", start.alone, { send(Event.SetAlone(it)) }, Modifier.fillMaxWidth())
+                start.problems.messageFor(Problem.NotAlone)?.let { ErrorText(it) }
+                CheckOption("차를 안전하게 세웠어요", start.parked, { send(Event.SetParked(it)) }, Modifier.fillMaxWidth())
+                start.problems.messageFor(Problem.NotParkedConfirmed)?.let { ErrorText(it) }
+                start.problems.messageFor(Problem.VehicleNotParked)?.let { ErrorText(it) }
             }
         }
-        start.problems.messageFor(Problem.NoRole)?.let { ErrorText(it) }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.start_conditions), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
-            CheckOption(stringResource(R.string.start_alone), start.alone, { send(Event.SetAlone(it)) })
-            start.problems.messageFor(Problem.NotAlone)?.let { ErrorText(it) }
-            CheckOption(stringResource(R.string.start_parked), start.parked, { send(Event.SetParked(it)) })
-            start.problems.messageFor(Problem.NotParkedConfirmed)?.let { ErrorText(it) }
+    }
+}
+
+@Composable
+private fun ProfileChoices(label: String, field: StartField, choices: List<String>, start: Session.Start, send: (Event) -> Unit) {
+    Text(label, style = PleosType.TitleSmall, color = PleosColor.TextSecondary)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        choices.forEach { value ->
+            ChoiceOption(value, start.details[field] == value, { send(Event.SetStartDetail(field, value)) })
         }
-        start.problems.messageFor(Problem.VehicleNotParked)?.let { ErrorText(it) }
+    }
+}
+
+@Composable
+private fun GrowthProgress(current: Int, total: Int) {
+    val stages = listOf("씨앗", "새싹", "어린 나무", "나무")
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        repeat(total) { index ->
+            val active = index < current
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(if (active) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary).padding(12.dp), contentAlignment = Alignment.Center) {
+                Text("${listOf("●", "🌱", "🌿", "🌳")[index * 4 / total]}  ${stages[index * 4 / total]}", style = PleosType.LabelSmall, color = if (active) PleosColor.FilledEnabled else PleosColor.TextQuaternary)
+            }
+        }
     }
 }
 
@@ -197,6 +238,7 @@ private fun StoryScreen(story: Material.Story, problems: Set<Problem>, send: (Ev
             }, style = ButtonStyle.Primary)
         },
     ) {
+        GrowthProgress(step + 1, 4)
         Text("${step + 1} / 4 · 내 이야기를 한 걸음씩 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         if (step == 1) {
             MoodCarousel(story.feeling) { send(Event.EditMaterial(story.copy(feeling = it))) }
@@ -225,6 +267,7 @@ private fun InterestScreen(interest: Material.Interest, problems: Set<Problem>, 
             }, style = ButtonStyle.Primary)
         },
     ) {
+        GrowthProgress(step + 1, 2)
         Text("${step + 1} / 2 · 이미 알고 있는 내용만 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         Text(stringResource(R.string.interest_note), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         if (step == 0) LabeledField(stringResource(R.string.interest_topic), true, interest.topic,
@@ -340,26 +383,12 @@ private fun RestartScreen(title: Int, body: Int, restart: Int, parked: Boolean, 
 }
 
 @Composable
-private fun StepTrail(current: Int, total: Int) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        repeat(total) { index ->
-            Image(
-                painterResource(R.drawable.saigil_footsteps),
-                contentDescription = if (index + 1 == current) "현재 ${index + 1}단계" else null,
-                modifier = Modifier.height(56.dp).widthIn(min = 56.dp),
-                alpha = if (index + 1 <= current) 1f else 0.35f,
-            )
-        }
-    }
-}
-
-@Composable
 private fun MoodCarousel(selected: String, onSelect: (String) -> Unit) {
     val choices = listOf("기뻤어요", "걱정됐어요", "담담했어요", "잘 모르겠어요")
     var page by rememberSaveable { mutableIntStateOf(choices.indexOf(selected).coerceAtLeast(0)) }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Box(Modifier.size(260.dp).clip(CircleShape)
-            .background(listOf(Color(0xFFF1A99B), Color(0xFF9CC8DF), Color(0xFFC5C7A5), Color(0xFFE8D5BE))[page])
+            .background(listOf(Color(0xFFB9DFC4), Color(0xFFA8D2C1), Color(0xFFD2E9B2), Color(0xFFC9E4D4))[page])
             .clickable { onSelect(choices[page]) }, contentAlignment = Alignment.Center) {
             Text(choices[page], style = PleosType.TitleMedium, color = PleosColor.TextPrimary, textAlign = TextAlign.Center)
         }
