@@ -13,6 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -140,6 +148,7 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
             PleosButton(stringResource(R.string.action_next), { send(Event.Next) }, style = ButtonStyle.Primary)
         },
     ) {
+        Image(painterResource(R.drawable.saigil_paths), contentDescription = null, modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(24.dp)), contentScale = ContentScale.Crop)
         FlowRow(
             Modifier.selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
@@ -168,53 +177,35 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
 
 @Composable
 private fun StoryScreen(story: Material.Story, problems: Set<Problem>, send: (Event) -> Unit) {
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    val titles = listOf(R.string.story_scene, R.string.story_feeling, R.string.story_choice, R.string.story_leftover)
     ScreenFrame(
-        title = stringResource(R.string.story_title),
+        title = stringResource(titles[step]),
         actions = {
             PleosButton(stringResource(R.string.action_abort), { send(Event.Abort) })
-            PleosButton(stringResource(R.string.story_to_interest), { send(Event.SwitchToInterest) })
-            PleosButton(stringResource(R.string.action_next), { send(Event.Next) }, style = ButtonStyle.Primary)
+            if (step > 0) PleosButton("이전", { step-- })
+            else PleosButton(stringResource(R.string.story_to_interest), { send(Event.SwitchToInterest) })
+            PleosButton(if (step == 3) stringResource(R.string.action_next) else "다음", {
+                if (step < 3) step++ else send(Event.Next)
+            }, style = ButtonStyle.Primary)
         },
     ) {
-        Panes(
-            first = {
-                LabeledField(
-                    label = stringResource(R.string.story_scene),
-                    required = true,
-                    value = story.scene,
-                    onValueChange = { send(Event.EditMaterial(story.copy(scene = it))) },
-                    limit = Limit.SCENE,
-                    error = problems.messageFor(Problem.NoScene),
-                    minLines = 3,
-                )
-                LabeledField(
-                    label = stringResource(R.string.story_feeling),
-                    required = false,
-                    value = story.feeling,
-                    onValueChange = { send(Event.EditMaterial(story.copy(feeling = it))) },
-                    limit = Limit.STORY_OPTIONAL,
-                    error = null,
-                )
-            },
-            second = {
-                LabeledField(
-                    label = stringResource(R.string.story_choice),
-                    required = false,
-                    value = story.choice,
-                    onValueChange = { send(Event.EditMaterial(story.copy(choice = it))) },
-                    limit = Limit.STORY_OPTIONAL,
-                    error = null,
-                )
-                LabeledField(
-                    label = stringResource(R.string.story_leftover),
-                    required = false,
-                    value = story.leftover,
-                    onValueChange = { send(Event.EditMaterial(story.copy(leftover = it))) },
-                    limit = Limit.STORY_OPTIONAL,
-                    error = null,
-                )
-            },
-        )
+        Text("${'$'}{step + 1} / 4 · 내 이야기를 한 걸음씩 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        if (step == 1) {
+            Image(painterResource(R.drawable.saigil_choices), contentDescription = null, modifier = Modifier.fillMaxWidth().height(130.dp), contentScale = ContentScale.Fit)
+            FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                listOf("기뻤어요", "걱정됐어요", "담담했어요", "잘 모르겠어요").forEach { value ->
+                    ChoiceOption(value, story.feeling == value, { send(Event.EditMaterial(story.copy(feeling = value))) }, Modifier.widthIn(min = 200.dp))
+                }
+            }
+            Text("가장 가까운 마음을 고르거나 아래에 내 말로 적어도 좋아요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        }
+        when (step) {
+            0 -> LabeledField(stringResource(R.string.story_scene), true, story.scene, { send(Event.EditMaterial(story.copy(scene = it))) }, Limit.SCENE, problems.messageFor(Problem.NoScene), minLines = 3)
+            1 -> LabeledField(stringResource(R.string.story_feeling), false, story.feeling, { send(Event.EditMaterial(story.copy(feeling = it))) }, Limit.STORY_OPTIONAL, null)
+            2 -> LabeledField(stringResource(R.string.story_choice), false, story.choice, { send(Event.EditMaterial(story.copy(choice = it))) }, Limit.STORY_OPTIONAL, null)
+            else -> LabeledField(stringResource(R.string.story_leftover), false, story.leftover, { send(Event.EditMaterial(story.copy(leftover = it))) }, Limit.STORY_OPTIONAL, null)
+        }
     }
 }
 
