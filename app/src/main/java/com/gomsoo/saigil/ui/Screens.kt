@@ -40,8 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.gomsoo.saigil.R
 import com.gomsoo.saigil.session.Event
 import com.gomsoo.saigil.session.Guide
@@ -213,11 +216,19 @@ private fun ProfileChoices(label: String, field: StartField, choices: List<Strin
 @Composable
 private fun GrowthProgress(current: Int, total: Int) {
     val stages = listOf("씨앗", "새싹", "어린 나무", "나무")
+    val icons = listOf("🌰", "🌱", "🌿", "🌳")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         repeat(total) { index ->
             val active = index < current
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).background(if (active) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary).padding(12.dp), contentAlignment = Alignment.Center) {
-                Text("${listOf("●", "🌱", "🌿", "🌳")[index * 4 / total]}  ${stages[index * 4 / total]}", style = PleosType.LabelSmall, color = if (active) PleosColor.FilledEnabled else PleosColor.TextQuaternary)
+            val stage = index * 4 / total
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(18.dp))
+                    .background(if (active) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary)
+                    .clearAndSetSemantics { contentDescription = "${index + 1}/$total 단계, ${stages[stage]}${if (index + 1 == current) ", 현재" else ""}" }
+                    .padding(10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(icons[stage], fontSize = 30.sp)
             }
         }
     }
