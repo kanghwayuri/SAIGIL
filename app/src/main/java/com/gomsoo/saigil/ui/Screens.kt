@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -193,9 +192,9 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
             }
             else -> {
                 Text("이야기는 차를 세우고, 혼자 있을 때 준비해요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
-                CheckOption("혼자 있어요", start.alone, { send(Event.SetAlone(it)) }, Modifier.fillMaxWidth())
+                ConfirmationButton("혼자 있어요", start.alone, { send(Event.SetAlone(it)) }, Modifier.fillMaxWidth())
                 start.problems.messageFor(Problem.NotAlone)?.let { ErrorText(it) }
-                CheckOption("주차했어요", start.parked, { send(Event.SetParked(it)) }, Modifier.fillMaxWidth())
+                ConfirmationButton("주차했어요", start.parked, { send(Event.SetParked(it)) }, Modifier.fillMaxWidth())
                 start.problems.messageFor(Problem.NotParkedConfirmed)?.let { ErrorText(it) }
                 start.problems.messageFor(Problem.VehicleNotParked)?.let { ErrorText(it) }
             }
@@ -216,7 +215,7 @@ private fun ProfileChoices(label: String, field: StartField, choices: List<Strin
 @Composable
 private fun GrowthProgress(current: Int, total: Int) {
     val stages = listOf("씨앗", "새싹", "어린 나무", "나무")
-    val icons = listOf("🌰", "🌱", "🌿", "🌳")
+    val icons = listOf("●", "🌱", "🌿", "🌳")
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         repeat(total) { index ->
             val active = index < current
@@ -228,7 +227,7 @@ private fun GrowthProgress(current: Int, total: Int) {
                     .padding(10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(icons[stage], fontSize = 30.sp)
+                Text(icons[stage], fontSize = 30.sp, color = PleosColor.FilledEnabled)
             }
         }
     }
@@ -353,7 +352,6 @@ private fun GuideScreen(guide: Guide, send: (Event) -> Unit) {
         },
     ) {
         FlowRow(
-            Modifier.selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
