@@ -112,14 +112,14 @@ fun ErrorText(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun ChoiceOption(text: String, selected: Boolean, onSelect: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(32.dp)
     Row(
         modifier = modifier
             .shrinkWhenPressed(interaction)
             .heightIn(min = 100.dp)
             .clip(shape)
-            .background(if (selected) PleosColor.BackgroundSecondary else PleosColor.BasicEnabled)
-            .border(if (selected) 3.dp else 1.dp, if (selected) PleosColor.FilledEnabled else PleosColor.Divider, shape)
+            .background(if (selected) androidx.compose.ui.graphics.Color(0xFFFFE3D2) else PleosColor.BackgroundSecondary)
+            .border(if (selected) 3.dp else 1.dp, if (selected) androidx.compose.ui.graphics.Color(0xFFCE715F) else PleosColor.Divider, shape)
             .selectable(selected, interaction, indication = null, role = Role.RadioButton, onClick = onSelect)
             .padding(horizontal = 32.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
