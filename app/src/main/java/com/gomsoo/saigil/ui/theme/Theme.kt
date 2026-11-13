@@ -16,22 +16,22 @@ import com.gomsoo.saigil.R
 
 // Pleos Connect design assets 215, light mode.
 object PleosColor {
-    val BackgroundPrimary = Color(0xFFF5EBDD)
-    val BackgroundSecondary = Color(0xFFFFFBF4)
-    val TextPrimary = Color(0xFF40382F)
-    val TextSecondary = Color(0xFF5E5347)
-    val TextTertiary = Color(0xFF6B5E50)
-    val TextQuaternary = Color(0xFF8B8174)
-    val TextOnFilled = Color(0xFFFFFBF4)
-    val Divider = Color(0xFFD8C8B5)
-    val FilledEnabled = Color(0xFF6B5945)
-    val FilledPressed = Color(0xFF554433)
-    val FilledDisabled = Color(0xFFF0E2D1)
-    val BasicEnabled = Color(0xFFF0E2D1)
-    val BasicPressed = Color(0xFFD8C8B5)
-    val SwitchOn = Color(0xFF648368)
-    val SwitchOff = Color(0xFFAF9F8B)
-    val Field = Color(0xFFFFFBF4)
+    val BackgroundPrimary = Color(0xFFF2F6F1)
+    val BackgroundSecondary = Color(0xFFFFFFFF)
+    val TextPrimary = Color(0xFF202C27)
+    val TextSecondary = Color(0xFF40524A)
+    val TextTertiary = Color(0xFF52665A)
+    val TextQuaternary = Color(0xFF69786E)
+    val TextOnFilled = Color(0xFFFFFFFF)
+    val Divider = Color(0xFFD3E3D6)
+    val FilledEnabled = Color(0xFF236947)
+    val FilledPressed = Color(0xFF185437)
+    val FilledDisabled = Color(0xFFDCE7DF)
+    val BasicEnabled = Color(0xFFE3F0E5)
+    val BasicPressed = Color(0xFFCEE5D3)
+    val SwitchOn = Color(0xFF238052)
+    val SwitchOff = Color(0xFF82958A)
+    val Field = Color(0xFFFFFFFF)
     val Error = Color(0xFFB44134)
 }
 
@@ -57,15 +57,15 @@ private fun style(weight: FontWeight, size: Int, lineHeight: Int) = TextStyle(
 )
 
 object PleosType {
-    val HeadlineSmall = style(FontWeight.ExtraBold, 48, 64)
-    val TitleLarge = style(FontWeight.ExtraBold, 40, 52)
-    val TitleMedium = style(FontWeight.ExtraBold, 36, 44)
-    val TitleSmall = style(FontWeight.Bold, 32, 40)
-    val BodyLarge = style(FontWeight.Bold, 30, 38)
-    val BodyMedium = style(FontWeight.Bold, 28, 36)
-    val BodySmall = style(FontWeight.Bold, 26, 34)
-    val LabelMedium = style(FontWeight.Normal, 24, 28)
-    val LabelSmall = style(FontWeight.Normal, 20, 24)
+    val HeadlineSmall = style(FontWeight.ExtraBold, 40, 52)
+    val TitleLarge = style(FontWeight.ExtraBold, 34, 44)
+    val TitleMedium = style(FontWeight.ExtraBold, 30, 40)
+    val TitleSmall = style(FontWeight.Bold, 26, 34)
+    val BodyLarge = style(FontWeight.Bold, 24, 32)
+    val BodyMedium = style(FontWeight.Bold, 22, 30)
+    val BodySmall = style(FontWeight.Bold, 20, 28)
+    val LabelMedium = style(FontWeight.Normal, 20, 26)
+    val LabelSmall = style(FontWeight.Normal, 18, 24)
 }
 
 @Composable

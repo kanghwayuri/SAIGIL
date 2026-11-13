@@ -2,7 +2,6 @@ package com.gomsoo.saigil.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -51,9 +50,9 @@ enum class ButtonStyle { Primary, Secondary }
 
 /** ivi_basic_button sizes. */
 enum class ButtonSize(val height: Dp, val radius: Dp, val paddingH: Dp, val minWidth: Dp, val text: TextStyle) {
-    Large(100.dp, 32.dp, 40.dp, 140.dp, PleosType.BodyLarge),
-    Medium(80.dp, 24.dp, 32.dp, 120.dp, PleosType.BodyMedium),
-    Small(64.dp, 16.dp, 24.dp, 100.dp, PleosType.BodySmall),
+    Large(88.dp, 28.dp, 36.dp, 140.dp, PleosType.BodyLarge),
+    Medium(72.dp, 22.dp, 28.dp, 120.dp, PleosType.BodySmall),
+    Small(60.dp, 16.dp, 22.dp, 100.dp, PleosType.LabelMedium),
 }
 
 @Composable
@@ -118,8 +117,7 @@ fun ChoiceOption(text: String, selected: Boolean, onSelect: () -> Unit, modifier
             .shrinkWhenPressed(interaction)
             .heightIn(min = 100.dp)
             .clip(shape)
-            .background(if (selected) androidx.compose.ui.graphics.Color(0xFFFFE3D2) else PleosColor.BackgroundSecondary)
-            .border(if (selected) 3.dp else 1.dp, if (selected) androidx.compose.ui.graphics.Color(0xFFCE715F) else PleosColor.Divider, shape)
+            .background(if (selected) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary)
             .selectable(selected, interaction, indication = null, role = Role.RadioButton, onClick = onSelect)
             .padding(horizontal = 32.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -143,10 +141,11 @@ fun CheckOption(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Un
     Row(
         modifier = modifier
             .shrinkWhenPressed(interaction)
-            .heightIn(min = 80.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .heightIn(min = 96.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (checked) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary)
             .toggleable(checked, interaction, indication = null, role = Role.Checkbox, onValueChange = onCheckedChange)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -199,8 +198,8 @@ fun LabeledField(
             focusedContainerColor = PleosColor.Field,
             unfocusedContainerColor = PleosColor.Field,
             errorContainerColor = PleosColor.Field,
-            focusedBorderColor = PleosColor.FilledEnabled,
-            unfocusedBorderColor = PleosColor.Divider,
+            focusedBorderColor = PleosColor.Field,
+            unfocusedBorderColor = PleosColor.Field,
             focusedLabelColor = PleosColor.TextSecondary,
             unfocusedLabelColor = PleosColor.TextTertiary,
             cursorColor = PleosColor.TextPrimary,
