@@ -1,6 +1,7 @@
 package com.gomsoo.saigil.session
 
-enum class Role { Parent, Child }
+enum class Role { Parent, Child, Partner, Friend, Other }
+enum class StartField { MyAge, MyWork, MyArea, CompanionAge, CompanionGender, CompanionStyle, CompanionInterest }
 
 enum class Guide { Off, OnceGeneric }
 
@@ -38,6 +39,8 @@ sealed interface Session {
     /** W01 */
     data class Start(
         val role: Role? = null,
+        val step: Int = 0,
+        val details: Map<StartField, String> = emptyMap(),
         val alone: Boolean = false,
         val parked: Boolean = false,
         val problems: Set<Problem> = emptySet(),
@@ -82,6 +85,8 @@ data class Model(
 
 sealed interface Event {
     data class SelectRole(val role: Role) : Event
+    data class SetStartDetail(val field: StartField, val value: String) : Event
+    data object Previous : Event
     data class SetAlone(val value: Boolean) : Event
     data class SetParked(val value: Boolean) : Event
     data class EditMaterial(val material: Material) : Event
@@ -184,9 +189,13 @@ private fun onVehicle(session: Session, restriction: Restriction): Session = whe
 private fun onStart(start: Session.Start, event: Event, vehicle: Restriction): Session {
     val edited = when (event) {
         is Event.SelectRole -> start.copy(role = event.role)
+        is Event.SetStartDetail -> start.copy(details = start.details + (event.field to event.value))
+        Event.Previous -> start.copy(step = (start.step - 1).coerceAtLeast(0), problems = emptySet())
         is Event.SetAlone -> start.copy(alone = event.value)
         is Event.SetParked -> start.copy(parked = event.value)
         Event.Next -> {
+            if (start.step == 0 && start.role == null) return start.copy(problems = setOf(Problem.NoRole))
+            if (start.step < 3) return start.copy(step = start.step + 1, problems = emptySet())
             val found = problems(start, vehicle)
             return if (found.isEmpty()) Session.Compose(start.role!!, Material.Story()) else start.copy(problems = found)
         }
