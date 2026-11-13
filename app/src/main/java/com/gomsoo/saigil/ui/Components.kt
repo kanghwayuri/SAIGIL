@@ -15,15 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +31,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -112,54 +107,24 @@ fun ErrorText(text: String, modifier: Modifier = Modifier) {
 fun ChoiceOption(text: String, selected: Boolean, onSelect: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(32.dp)
-    Row(
+    Box(
         modifier = modifier
             .shrinkWhenPressed(interaction)
             .heightIn(min = 100.dp)
             .clip(shape)
-            .background(if (selected) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary)
-            .selectable(selected, interaction, indication = null, role = Role.RadioButton, onClick = onSelect)
+            .background(if (selected) PleosColor.FilledEnabled else PleosColor.BackgroundSecondary)
+            .clickable(interaction, indication = null, role = Role.Button, onClick = onSelect)
+            .semantics { stateDescription = if (selected) "선택됨" else "선택 안 됨" }
             .padding(horizontal = 32.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = null,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = PleosColor.FilledEnabled,
-                unselectedColor = PleosColor.TextTertiary,
-            ),
-        )
-        Text(text, style = PleosType.BodyLarge)
+        Text(text, style = PleosType.BodyLarge, color = if (selected) PleosColor.TextOnFilled else PleosColor.TextPrimary, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
-fun CheckOption(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    val interaction = remember { MutableInteractionSource() }
-    Row(
-        modifier = modifier
-            .shrinkWhenPressed(interaction)
-            .heightIn(min = 96.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(if (checked) PleosColor.BasicEnabled else PleosColor.BackgroundSecondary)
-            .toggleable(checked, interaction, indication = null, role = Role.Checkbox, onValueChange = onCheckedChange)
-            .padding(horizontal = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = null,
-            colors = CheckboxDefaults.colors(
-                checkedColor = PleosColor.FilledEnabled,
-                uncheckedColor = PleosColor.TextTertiary,
-                checkmarkColor = PleosColor.TextOnFilled,
-            ),
-        )
-        Text(text, style = PleosType.BodyMedium)
-    }
+fun ConfirmationButton(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    ChoiceOption(text, checked, { onCheckedChange(!checked) }, modifier)
 }
 
 @Composable
