@@ -12,6 +12,7 @@ Pleos Connect UI Design Guide(원문: [`design-guide/`](./design-guide/00-introd
 - **색상 토큰 값, 폰트 크기 체계, 컴포넌트 치수 대부분은 원문 이미지와 Figma 파일 안에만 있습니다.** 텍스트로 적힌 수치만 이 요약에 들어 있습니다. 정확한 값은 Figma 파일에서 가져옵니다.
   - [Pleos Connect design assets (.fig)](https://document.pleos.ai/img/Pleos_Connect_design_assets_215.fig)
   - [Pleos Connect display guide (.fig)](https://document.pleos.ai/img/Pleos_Connect_display_guide_215.fig)
+  - Figma에 올린 파일의 node-id와 폼팩터별 화면 치수는 [`figma-map.md`](./figma-map.md)에 있습니다.
 - 원문 이미지 중 1MB가 넘는 14개는 로컬에 저장하지 않고 원본 URL로 링크했습니다. 사이트가 바뀌면 깨질 수 있습니다.
 
 ## 1. 기본 원칙
