@@ -211,37 +211,25 @@ private fun StoryScreen(story: Material.Story, problems: Set<Problem>, send: (Ev
 
 @Composable
 private fun InterestScreen(interest: Material.Interest, problems: Set<Problem>, send: (Event) -> Unit) {
+    var step by rememberSaveable { mutableIntStateOf(0) }
     ScreenFrame(
-        title = stringResource(R.string.interest_title),
+        title = stringResource(if (step == 0) R.string.interest_topic else R.string.interest_source),
         actions = {
             PleosButton(stringResource(R.string.action_abort), { send(Event.Abort) })
-            PleosButton(stringResource(R.string.interest_to_story), { send(Event.SwitchToStory) })
-            PleosButton(stringResource(R.string.action_next), { send(Event.Next) }, style = ButtonStyle.Primary)
+            PleosButton(if (step == 0) stringResource(R.string.interest_to_story) else "이전", {
+                if (step == 0) send(Event.SwitchToStory) else step = 0
+            })
+            PleosButton(if (step == 0) "다음" else stringResource(R.string.action_next), {
+                if (step == 0) step = 1 else send(Event.Next)
+            }, style = ButtonStyle.Primary)
         },
     ) {
+        Text("${'$'}{step + 1} / 2 · 이미 알고 있는 내용만 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         Text(stringResource(R.string.interest_note), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
-        Panes(
-            first = {
-                LabeledField(
-                    label = stringResource(R.string.interest_topic),
-                    required = true,
-                    value = interest.topic,
-                    onValueChange = { send(Event.EditMaterial(interest.copy(topic = it))) },
-                    limit = Limit.INTEREST,
-                    error = problems.messageFor(Problem.NoTopic),
-                )
-            },
-            second = {
-                LabeledField(
-                    label = stringResource(R.string.interest_source),
-                    required = true,
-                    value = interest.source,
-                    onValueChange = { send(Event.EditMaterial(interest.copy(source = it))) },
-                    limit = Limit.INTEREST,
-                    error = problems.messageFor(Problem.NoSource),
-                )
-            },
-        )
+        if (step == 0) LabeledField(stringResource(R.string.interest_topic), true, interest.topic,
+            { send(Event.EditMaterial(interest.copy(topic = it))) }, Limit.INTEREST, problems.messageFor(Problem.NoTopic))
+        else LabeledField(stringResource(R.string.interest_source), true, interest.source,
+            { send(Event.EditMaterial(interest.copy(source = it))) }, Limit.INTEREST, problems.messageFor(Problem.NoSource))
     }
 }
 
@@ -347,5 +335,19 @@ private fun RestartScreen(title: Int, body: Int, restart: Int, parked: Boolean, 
     ) {
         Text(stringResource(body), style = PleosType.BodyMedium, color = PleosColor.TextSecondary)
         if (!parked) Text(stringResource(R.string.restart_needs_parked), style = PleosType.BodySmall)
+    }
+}
+
+@Composable
+private fun StepTrail(current: Int, total: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(total) { index ->
+            Image(
+                painterResource(R.drawable.saigil_footsteps),
+                contentDescription = if (index + 1 == current) "현재 ${index + 1}단계" else null,
+                modifier = Modifier.height(56.dp).widthIn(min = 56.dp),
+                alpha = if (index + 1 <= current) 1f else 0.35f,
+            )
+        }
     }
 }
