@@ -155,20 +155,20 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
         actions = {
             if (start.step > 0) PleosButton("이전", { send(Event.Previous) })
             else PleosButton(stringResource(R.string.start_quit), { send(Event.Abort) })
-            PleosButton(if (start.step == 3) "이야기 준비하기" else "다음", { send(Event.Next) }, style = ButtonStyle.Primary)
+            PleosButton(if (start.step == 3) "이야기 시작" else "다음", { send(Event.Next) }, style = ButtonStyle.Primary)
         },
     ) {
         GrowthProgress(start.step + 1, 4)
         when (start.step) {
             0 -> {
-                Text("당신은 누구인가요? 함께 타는 사람과의 관계를 골라 주세요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                Text("함께 타는 사람은 누구인가요?", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     listOf(
-                        Role.Parent to "자녀와 함께 타요",
-                        Role.Child to "부모님과 함께 타요",
-                        Role.Partner to "배우자·연인과 함께 타요",
-                        Role.Friend to "친구와 함께 타요",
-                        Role.Other to "다른 소중한 사람과 타요",
+                        Role.Parent to "자녀",
+                        Role.Child to "부모님",
+                        Role.Partner to "배우자·연인",
+                        Role.Friend to "친구",
+                        Role.Other to "그 외",
                     ).forEach { (role, label) ->
                         ChoiceOption(label, start.role == role, { send(Event.SelectRole(role)) }, Modifier.widthIn(min = 340.dp))
                     }
@@ -179,20 +179,20 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
                 Text("편한 항목만 골라도 괜찮아요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
                 ProfileChoices("나이대", StartField.MyAge, listOf("10대", "20대", "30대", "40대", "50대 이상"), start, send)
                 ProfileChoices("하는 일", StartField.MyWork, listOf("학생", "직장인", "자영업", "가사·돌봄", "기타"), start, send)
-                ProfileChoices("사는 곳", StartField.MyArea, listOf("같은 집", "가까운 곳", "멀리 떨어져요"), start, send)
+                ProfileChoices("동승자와 사는 거리", StartField.MyArea, listOf("같은 집", "가까이", "멀리"), start, send)
             }
             2 -> {
                 Text("정확히 몰라도 괜찮아요. 떠오르는 것만 골라 주세요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
                 ProfileChoices("나이대", StartField.CompanionAge, listOf("10대", "20대", "30대", "40대", "50대 이상"), start, send)
-                ProfileChoices("성별", StartField.CompanionGender, listOf("여성", "남성", "응답하지 않을래요"), start, send)
-                ProfileChoices("평소 모습", StartField.CompanionStyle, listOf("활발한 편", "차분한 편", "잘 모르겠어요"), start, send)
-                ProfileChoices("관심사", StartField.CompanionInterest, listOf("음악", "운동", "여행", "음식", "아직 모르겠어요"), start, send)
+                ProfileChoices("성별", StartField.CompanionGender, listOf("여성", "남성", "응답 안 함"), start, send)
+                ProfileChoices("평소 모습", StartField.CompanionStyle, listOf("활발", "차분", "모르겠어요"), start, send)
+                ProfileChoices("관심사", StartField.CompanionInterest, listOf("음악", "운동", "여행", "음식", "모르겠어요"), start, send)
             }
             else -> {
                 Text("이야기는 차를 세우고, 혼자 있을 때 준비해요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
-                CheckOption("지금 혼자 있어요", start.alone, { send(Event.SetAlone(it)) }, Modifier.fillMaxWidth())
+                CheckOption("혼자 있어요", start.alone, { send(Event.SetAlone(it)) }, Modifier.fillMaxWidth())
                 start.problems.messageFor(Problem.NotAlone)?.let { ErrorText(it) }
-                CheckOption("차를 안전하게 세웠어요", start.parked, { send(Event.SetParked(it)) }, Modifier.fillMaxWidth())
+                CheckOption("주차했어요", start.parked, { send(Event.SetParked(it)) }, Modifier.fillMaxWidth())
                 start.problems.messageFor(Problem.NotParkedConfirmed)?.let { ErrorText(it) }
                 start.problems.messageFor(Problem.VehicleNotParked)?.let { ErrorText(it) }
             }
@@ -393,9 +393,9 @@ private fun MoodCarousel(selected: String, onSelect: (String) -> Unit) {
             Text(choices[page], style = PleosType.TitleMedium, color = PleosColor.TextPrimary, textAlign = TextAlign.Center)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            PleosButton("이전 선택", { page = (page + choices.size - 1) % choices.size }, size = ButtonSize.Small)
+            PleosButton("이전 마음", { page = (page + choices.size - 1) % choices.size }, size = ButtonSize.Small)
             Text("${page + 1} / ${choices.size}", style = PleosType.LabelMedium)
-            PleosButton("다음 선택", { page = (page + 1) % choices.size }, size = ButtonSize.Small)
+            PleosButton("다음 마음", { page = (page + 1) % choices.size }, size = ButtonSize.Small)
         }
         Text(if (selected == choices[page]) "골랐어요" else "원을 눌러 고르세요", style = PleosType.LabelMedium)
     }
