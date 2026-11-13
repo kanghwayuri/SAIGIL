@@ -16,6 +16,9 @@ class SessionTest {
         Event.SetAlone(true),
         Event.SetParked(true),
         Event.Next,
+        Event.Next,
+        Event.Next,
+        Event.Next,
     )
 
     private val story = Material.Story(
@@ -57,18 +60,9 @@ class SessionTest {
     @Test
     fun startNeedsRoleBothConfirmationsAndParkedVehicle() {
         val blocked = Model().after(Event.Next)
-
-        assertEquals(
-            Session.Start(
-                problems = setOf(
-                    Problem.NoRole,
-                    Problem.NotAlone,
-                    Problem.NotParkedConfirmed,
-                    Problem.VehicleNotParked,
-                ),
-            ),
-            blocked.session,
-        )
+        assertEquals(setOf(Problem.NoRole), (blocked.session as Session.Start).problems)
+        val safety = blocked.after(Event.SelectRole(Role.Parent), Event.Next, Event.Next, Event.Next, Event.Next)
+        assertEquals(setOf(Problem.NotAlone, Problem.NotParkedConfirmed, Problem.VehicleNotParked), (safety.session as Session.Start).problems)
     }
 
     @Test
@@ -77,6 +71,9 @@ class SessionTest {
             Event.SelectRole(Role.Child),
             Event.SetAlone(true),
             Event.SetParked(true),
+            Event.Next,
+            Event.Next,
+            Event.Next,
             Event.Next,
         )
 
@@ -89,9 +86,20 @@ class SessionTest {
 
     @Test
     fun startProblemsClearAsTheUserFixesThem() {
-        val fixed = parkedStart.after(Event.Next, Event.SelectRole(Role.Parent), Event.SetAlone(true))
+        val fixed = parkedStart.after(Event.Next, Event.SelectRole(Role.Parent), Event.Next, Event.Next, Event.Next, Event.Next, Event.SetAlone(true))
 
         assertEquals(setOf(Problem.NotParkedConfirmed), (fixed.session as Session.Start).problems)
+    }
+
+    @Test
+    fun startChoicesPersistAcrossStepsAndClearOnAbort() {
+        val first = parkedStart.after(Event.SelectRole(Role.Friend), Event.Next)
+        assertEquals(1, (first.session as Session.Start).step)
+        val second = first.after(Event.SetStartDetail(StartField.MyAge, "30대"), Event.Next)
+        assertEquals("30대", (second.session as Session.Start).details[StartField.MyAge])
+        assertEquals(2, (second.session as Session.Start).step)
+        assertEquals(1, (second.after(Event.Previous).session as Session.Start).step)
+        assertEquals(Session.Protected, second.after(Event.Abort).session)
     }
 
     @Test
