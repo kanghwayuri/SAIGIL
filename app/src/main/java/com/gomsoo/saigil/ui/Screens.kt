@@ -1,6 +1,7 @@
 package com.gomsoo.saigil.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,18 +15,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -190,19 +197,13 @@ private fun StoryScreen(story: Material.Story, problems: Set<Problem>, send: (Ev
             }, style = ButtonStyle.Primary)
         },
     ) {
-        Text("${'$'}{step + 1} / 4 · 내 이야기를 한 걸음씩 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        Text("${step + 1} / 4 · 내 이야기를 한 걸음씩 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         if (step == 1) {
-            Image(painterResource(R.drawable.saigil_choices), contentDescription = null, modifier = Modifier.fillMaxWidth().height(130.dp), contentScale = ContentScale.Fit)
-            FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                listOf("기뻤어요", "걱정됐어요", "담담했어요", "잘 모르겠어요").forEach { value ->
-                    ChoiceOption(value, story.feeling == value, { send(Event.EditMaterial(story.copy(feeling = value))) }, Modifier.widthIn(min = 200.dp))
-                }
-            }
-            Text("가장 가까운 마음을 고르거나 아래에 내 말로 적어도 좋아요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+            MoodCarousel(story.feeling) { send(Event.EditMaterial(story.copy(feeling = it))) }
         }
         when (step) {
             0 -> LabeledField(stringResource(R.string.story_scene), true, story.scene, { send(Event.EditMaterial(story.copy(scene = it))) }, Limit.SCENE, problems.messageFor(Problem.NoScene), minLines = 3)
-            1 -> LabeledField(stringResource(R.string.story_feeling), false, story.feeling, { send(Event.EditMaterial(story.copy(feeling = it))) }, Limit.STORY_OPTIONAL, null)
+            1 -> Text("가장 가까운 마음을 골라요. 꼭 맞는 말이 없으면 그냥 넘어가도 괜찮아요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
             2 -> LabeledField(stringResource(R.string.story_choice), false, story.choice, { send(Event.EditMaterial(story.copy(choice = it))) }, Limit.STORY_OPTIONAL, null)
             else -> LabeledField(stringResource(R.string.story_leftover), false, story.leftover, { send(Event.EditMaterial(story.copy(leftover = it))) }, Limit.STORY_OPTIONAL, null)
         }
@@ -224,7 +225,7 @@ private fun InterestScreen(interest: Material.Interest, problems: Set<Problem>, 
             }, style = ButtonStyle.Primary)
         },
     ) {
-        Text("${'$'}{step + 1} / 2 · 이미 알고 있는 내용만 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        Text("${step + 1} / 2 · 이미 알고 있는 내용만 준비해요", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         Text(stringResource(R.string.interest_note), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         if (step == 0) LabeledField(stringResource(R.string.interest_topic), true, interest.topic,
             { send(Event.EditMaterial(interest.copy(topic = it))) }, Limit.INTEREST, problems.messageFor(Problem.NoTopic))
@@ -349,5 +350,24 @@ private fun StepTrail(current: Int, total: Int) {
                 alpha = if (index + 1 <= current) 1f else 0.35f,
             )
         }
+    }
+}
+
+@Composable
+private fun MoodCarousel(selected: String, onSelect: (String) -> Unit) {
+    val choices = listOf("기뻤어요", "걱정됐어요", "담담했어요", "잘 모르겠어요")
+    var page by rememberSaveable { mutableIntStateOf(choices.indexOf(selected).coerceAtLeast(0)) }
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Box(Modifier.size(260.dp).clip(CircleShape)
+            .background(listOf(Color(0xFFF1A99B), Color(0xFF9CC8DF), Color(0xFFC5C7A5), Color(0xFFE8D5BE))[page])
+            .clickable { onSelect(choices[page]) }, contentAlignment = Alignment.Center) {
+            Text(choices[page], style = PleosType.TitleMedium, color = PleosColor.TextPrimary, textAlign = TextAlign.Center)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            PleosButton("이전 선택", { page = (page + choices.size - 1) % choices.size }, size = ButtonSize.Small)
+            Text("${page + 1} / ${choices.size}", style = PleosType.LabelMedium)
+            PleosButton("다음 선택", { page = (page + 1) % choices.size }, size = ButtonSize.Small)
+        }
+        Text(if (selected == choices[page]) "골랐어요" else "원을 눌러 고르세요", style = PleosType.LabelMedium)
     }
 }
