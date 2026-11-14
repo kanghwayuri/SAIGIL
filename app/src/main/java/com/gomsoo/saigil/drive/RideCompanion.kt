@@ -81,17 +81,11 @@ class RideCompanion(private val context: Context, private val store: LibraryStor
             return
         }
         tts = speech
-        speech.addEventListener(object : EventListener {
-            override fun onStart() = log("TTS start")
-            override fun onDone() = log("TTS done")
-            override fun onStop() = log("TTS stop")
-            override fun onError(errorType: ErrorType) = log("TTS error: $errorType")
-            override fun onReady() = Unit
-            override fun onUpdatedRms(rms: Double) = Unit
-        })
         speech.initialize(object : OnInitializeListener {
             override fun onSuccess() {
                 main.post {
+                    // The SDK binds its service in initialize, so listeners can only be added after it succeeds.
+                    speech.addEventListener(events)
                     speech.setLocale(Locale.KOREA)
                     ttsReady = true
                     log("TTS ready")
@@ -101,6 +95,15 @@ class RideCompanion(private val context: Context, private val store: LibraryStor
 
             override fun onFailure(errorType: ErrorType) = log("TTS initialize failed: $errorType")
         })
+    }
+
+    private val events = object : EventListener {
+        override fun onStart() = log("TTS start")
+        override fun onDone() = log("TTS done")
+        override fun onStop() = log("TTS stop")
+        override fun onError(errorType: ErrorType) = log("TTS error: $errorType")
+        override fun onReady() = Unit
+        override fun onUpdatedRms(rms: Double) = Unit
     }
 
     private fun speak(sentence: String) {
