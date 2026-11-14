@@ -288,7 +288,8 @@ private fun MethodCard(rec: Recommended, role: Role, selected: Boolean, onSelect
         Text(rec.method.title, style = PleosType.TitleSmall)
         Text(rec.method.why, style = PleosType.BodySmall, color = PleosColor.TextSecondary)
         if (rec.reasons.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow under-reports its wrapped height to the IntrinsicSize.Max row, which clipped the card bottom.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 rec.reasons.forEach { reason ->
                     Text(
                         reason,
