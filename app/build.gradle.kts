@@ -42,6 +42,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.pleos.vehicle)
     implementation(libs.pleos.stt)
+    implementation(libs.pleos.tts)
+    implementation(libs.pleos.navihelper)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
