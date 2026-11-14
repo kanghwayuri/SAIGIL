@@ -41,6 +41,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.pleos.vehicle)
+    implementation(libs.pleos.stt)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

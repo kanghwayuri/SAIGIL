@@ -1,0 +1,510 @@
+package com.gomsoo.saigil.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.gomsoo.saigil.R
+import com.gomsoo.saigil.Ui
+import com.gomsoo.saigil.library.Flow
+import com.gomsoo.saigil.library.Library
+import com.gomsoo.saigil.library.PersonId
+import com.gomsoo.saigil.library.Relation
+import com.gomsoo.saigil.recommend.Approach
+import com.gomsoo.saigil.recommend.Opener
+import com.gomsoo.saigil.recommend.Reason
+import com.gomsoo.saigil.screen.Capture
+import com.gomsoo.saigil.screen.Event
+import com.gomsoo.saigil.screen.InputKind
+import com.gomsoo.saigil.screen.NAME_LIMIT
+import com.gomsoo.saigil.screen.Problem
+import com.gomsoo.saigil.screen.Purpose
+import com.gomsoo.saigil.screen.Screen
+import com.gomsoo.saigil.screen.Stt
+import com.gomsoo.saigil.screen.SttFailure
+import com.gomsoo.saigil.screen.TEXT_LIMIT
+import com.gomsoo.saigil.ui.theme.PleosColor
+import com.gomsoo.saigil.ui.theme.PleosType
+import com.gomsoo.saigil.vehicle.Restriction
+
+@Composable
+fun SaigilApp(ui: Ui, send: (Event) -> Unit) {
+    if (ui.model.vehicle == Restriction.Restricted) {
+        DrivingScreen(ui)
+        return
+    }
+    val screen = ui.model.screen
+    BackHandler(enabled = screen != Screen.Home) { send(Event.Back) }
+    val library = ui.library
+    when (screen) {
+        Screen.Home -> HomeScreen(ui, send)
+        Screen.People -> PeopleScreen(library, send)
+        is Screen.PersonEdit -> PersonEditScreen(screen, send)
+        is Screen.TopicCapture -> CaptureScreen(
+            title = stringResource(R.string.capture_title),
+            note = stringResource(R.string.capture_about, library.nameOf(screen.person)),
+            field = stringResource(R.string.capture_field),
+            capture = screen.capture,
+            problems = screen.problems,
+            back = stringResource(R.string.capture_later),
+            submit = stringResource(R.string.action_save),
+            send = send,
+        )
+        is Screen.PickPair -> PickPairScreen(screen, library, send)
+        is Screen.ChooseInput -> ChooseInputScreen(send)
+        is Screen.Listen -> CaptureScreen(
+            title = stringResource(if (screen.kind == InputKind.Topic) R.string.listen_topic_title else R.string.listen_context_title),
+            note = "${library.nameOf(screen.riders.driver)} · ${library.nameOf(screen.riders.passenger)}",
+            field = stringResource(if (screen.kind == InputKind.Topic) R.string.listen_topic_field else R.string.listen_context_field),
+            capture = screen.capture,
+            problems = screen.problems,
+            back = stringResource(R.string.action_back),
+            submit = stringResource(R.string.listen_submit),
+            send = send,
+        )
+        is Screen.Openers -> OpenersScreen(screen, send)
+        is Screen.SavedTopics -> SavedTopicsScreen(screen, send)
+        is Screen.Reflect -> ReflectScreen(screen, library, send)
+    }
+}
+
+@Composable
+private fun ScreenFrame(
+    title: String,
+    note: String? = null,
+    actions: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding()) {
+        Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
+            Column(
+                Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                Text(title, style = PleosType.TitleLarge, modifier = Modifier.semantics { heading() })
+                if (note != null) Text(note, style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                content()
+            }
+        }
+        if (actions != null) {
+            HorizontalDivider(color = PleosColor.Divider)
+            FlowRow(
+                Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) { actions() }
+        }
+    }
+}
+
+/** Items side by side on a wide window, stacked on a narrow one. */
+@Composable
+private fun <T> Columns(items: List<T>, perRow: Int, item: @Composable ColumnScope.(T) -> Unit) {
+    BoxWithConstraints {
+        val columns = if (maxWidth >= 1000.dp) perRow else 1
+        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            items.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    row.forEach { Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { item(it) } }
+                    repeat(columns - row.size) { Box(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Chip(text: String) {
+    Text(
+        text,
+        style = PleosType.LabelMedium,
+        color = PleosColor.TextPrimary,
+        modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(PleosColor.BasicEnabled).padding(horizontal = 16.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun Problem.message(): String = stringResource(
+    when (this) {
+        Problem.NoName -> R.string.problem_no_name
+        Problem.NoRelation -> R.string.problem_no_relation
+        Problem.NoDriver -> R.string.problem_no_driver
+        Problem.NoPassenger -> R.string.problem_no_passenger
+        Problem.SamePerson -> R.string.problem_same_person
+        Problem.NoText -> R.string.problem_no_text
+        Problem.NoFlow -> R.string.problem_no_flow
+    },
+)
+
+@Composable
+private fun Problems(problems: Set<Problem>, vararg shown: Problem) {
+    shown.filter { it in problems }.forEach { ErrorText(it.message()) }
+}
+
+@Composable
+private fun Relation.label(): String = stringResource(
+    when (this) {
+        Relation.Me -> R.string.relation_me
+        Relation.Parent -> R.string.relation_parent
+        Relation.Child -> R.string.relation_child
+        Relation.Partner -> R.string.relation_partner
+        Relation.Friend -> R.string.relation_friend
+        Relation.Other -> R.string.relation_other
+    },
+)
+
+private fun Library.nameOf(id: PersonId): String = person(id)?.name.orEmpty()
+
+@Composable
+private fun HomeScreen(ui: Ui, send: (Event) -> Unit) {
+    val ride = ui.ride
+    ScreenFrame(
+        title = stringResource(R.string.home_title),
+        note = ride?.let { stringResource(R.string.ride_active, ui.library.nameOf(it.riders.driver), ui.library.nameOf(it.riders.passenger)) }
+            ?: stringResource(R.string.home_body),
+    ) {
+        val modes = listOf(
+            Triple(R.string.home_input, R.string.home_input_body, Event.OpenPeople),
+            Triple(R.string.home_recommend, R.string.home_recommend_body, Event.OpenRecommend),
+            Triple(R.string.home_reflect, R.string.home_reflect_body, Event.OpenReflect),
+        )
+        Columns(modes, perRow = 3) { (title, body, event) ->
+            SelectableCard(selected = false, onSelect = { send(event) }) {
+                Text(stringResource(title), style = PleosType.TitleSmall)
+                Text(stringResource(body), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeopleScreen(library: Library, send: (Event) -> Unit) {
+    ScreenFrame(
+        title = stringResource(R.string.people_title),
+        actions = {
+            PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
+            PleosButton(stringResource(R.string.people_add), { send(Event.AddPerson) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        if (library.people.isEmpty()) Text(stringResource(R.string.people_empty), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        Columns(library.people, perRow = 2) { person ->
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(person.name, style = PleosType.TitleSmall)
+                    Chip(person.relation.label())
+                }
+                if (person.places.isNotEmpty()) {
+                    Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+                }
+                if (person.interests.isNotEmpty()) {
+                    Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+                }
+                Text(
+                    stringResource(R.string.people_topics, library.topics.count { person.id in it.about }),
+                    style = PleosType.LabelMedium,
+                    color = PleosColor.TextTertiary,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PleosButton(stringResource(R.string.people_edit), { send(Event.EditPerson(person.id)) }, size = ButtonSize.Small)
+                    PleosButton(stringResource(R.string.people_add_topic), { send(Event.AddTopicFor(person.id)) }, size = ButtonSize.Small)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonEditScreen(screen: Screen.PersonEdit, send: (Event) -> Unit) {
+    val draft = screen.draft
+    ScreenFrame(
+        title = stringResource(if (draft.id == null) R.string.person_new_title else R.string.person_edit_title),
+        actions = {
+            PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
+            PleosButton(stringResource(R.string.action_save), { send(Event.Submit) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        LabeledField(
+            label = stringResource(R.string.person_name),
+            required = true,
+            value = draft.name,
+            onValueChange = { send(Event.EditDraft(draft.copy(name = it))) },
+            limit = NAME_LIMIT,
+            error = if (Problem.NoName in screen.problems) Problem.NoName.message() else null,
+            minLines = 1,
+        )
+        Text(stringResource(R.string.person_relation), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Relation.entries.forEach { relation ->
+                ChoiceOption(relation.label(), draft.relation == relation, { send(Event.EditDraft(draft.copy(relation = relation))) }, Modifier.widthIn(min = 200.dp))
+            }
+        }
+        Problems(screen.problems, Problem.NoRelation)
+        LabeledField(
+            label = stringResource(R.string.person_places),
+            required = false,
+            value = draft.places,
+            onValueChange = { send(Event.EditDraft(draft.copy(places = it))) },
+            limit = TEXT_LIMIT,
+            error = null,
+            minLines = 1,
+        )
+        LabeledField(
+            label = stringResource(R.string.person_interests),
+            required = false,
+            value = draft.interests,
+            onValueChange = { send(Event.EditDraft(draft.copy(interests = it))) },
+            limit = TEXT_LIMIT,
+            error = null,
+            minLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun CaptureScreen(
+    title: String,
+    note: String,
+    field: String,
+    capture: Capture,
+    problems: Set<Problem>,
+    back: String,
+    submit: String,
+    send: (Event) -> Unit,
+) {
+    val listening = capture.stt is Stt.Listening
+    ScreenFrame(
+        title = title,
+        note = note,
+        actions = {
+            PleosButton(back, { send(Event.Back) })
+            PleosButton(submit, { send(Event.Submit) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            PleosButton(
+                stringResource(if (listening) R.string.mic_stop else R.string.mic_start),
+                { send(Event.Mic) },
+                style = if (listening) ButtonStyle.Secondary else ButtonStyle.Primary,
+                size = ButtonSize.Large,
+            )
+            when (val stt = capture.stt) {
+                is Stt.Listening -> Text(
+                    stringResource(R.string.mic_listening) + if (stt.partial.isNotEmpty()) " ${stt.partial}" else "",
+                    style = PleosType.BodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                is Stt.Failed -> ErrorText(
+                    stringResource(if (stt.reason == SttFailure.NoSpeech) R.string.stt_no_speech else R.string.stt_unavailable),
+                    Modifier.weight(1f),
+                )
+                Stt.Idle -> Text(stringResource(R.string.mic_hint), style = PleosType.LabelMedium, color = PleosColor.TextSecondary, modifier = Modifier.weight(1f))
+            }
+        }
+        LabeledField(
+            label = field,
+            required = true,
+            value = capture.text,
+            onValueChange = { send(Event.EditText(it)) },
+            limit = TEXT_LIMIT,
+            error = if (Problem.NoText in problems) Problem.NoText.message() else null,
+        )
+    }
+}
+
+@Composable
+private fun PickPairScreen(screen: Screen.PickPair, library: Library, send: (Event) -> Unit) {
+    val enough = library.people.size >= 2
+    ScreenFrame(
+        title = stringResource(if (screen.purpose == Purpose.Recommend) R.string.pair_title_recommend else R.string.pair_title_reflect),
+        actions = {
+            PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
+            if (enough) PleosButton(stringResource(R.string.action_next), { send(Event.Submit) }, style = ButtonStyle.Primary)
+            else PleosButton(stringResource(R.string.pair_make_profiles), { send(Event.OpenPeople) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        if (!enough) {
+            Text(stringResource(R.string.pair_need_two), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+            return@ScreenFrame
+        }
+        val seats = listOf(
+            Triple(R.string.pair_driver, screen.driver) { id: PersonId -> Event.PickDriver(id) },
+            Triple(R.string.pair_passenger, screen.passenger) { id: PersonId -> Event.PickPassenger(id) },
+        )
+        Columns(seats, perRow = 2) { (label, chosen, pick) ->
+            Text(stringResource(label), style = PleosType.TitleSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                library.people.forEach { person ->
+                    ChoiceOption(person.name, chosen == person.id, { send(pick(person.id)) }, Modifier.widthIn(min = 200.dp))
+                }
+            }
+        }
+        Problems(screen.problems, Problem.NoDriver, Problem.NoPassenger, Problem.SamePerson)
+    }
+}
+
+@Composable
+private fun ChooseInputScreen(send: (Event) -> Unit) {
+    ScreenFrame(
+        title = stringResource(R.string.input_title),
+        actions = { PleosButton(stringResource(R.string.action_back), { send(Event.Back) }) },
+    ) {
+        val kinds = listOf(
+            Triple(R.string.input_topic, R.string.input_topic_body, InputKind.Topic),
+            Triple(R.string.input_context, R.string.input_context_body, InputKind.Context),
+        )
+        Columns(kinds, perRow = 2) { (title, body, kind) ->
+            SelectableCard(selected = false, onSelect = { send(Event.ChooseKind(kind)) }) {
+                Text(stringResource(title), style = PleosType.TitleSmall)
+                Text(stringResource(body), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Approach.label(): String = stringResource(
+    when (this) {
+        Approach.Ask -> R.string.approach_ask
+        Approach.ShareMine -> R.string.approach_share
+        Approach.Celebrate -> R.string.approach_celebrate
+        Approach.Listen -> R.string.approach_listen
+    },
+)
+
+@Composable
+private fun OpenersScreen(screen: Screen.Openers, send: (Event) -> Unit) {
+    ScreenFrame(
+        title = stringResource(R.string.openers_title),
+        note = stringResource(R.string.openers_topic, screen.topic),
+        actions = {
+            PleosButton(stringResource(R.string.openers_other), { send(Event.Back) })
+            PleosButton(stringResource(R.string.action_done), { send(Event.Done) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        Columns(screen.cards, perRow = 3) { OpenerCard(it) }
+    }
+}
+
+@Composable
+private fun OpenerCard(opener: Opener) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Chip(opener.approach.label())
+        Text(stringResource(R.string.openers_first), style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
+        Text("“${opener.first}”", style = PleosType.BodyLarge)
+        Text(stringResource(R.string.openers_follow), style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
+        Text(opener.followUp, style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+    }
+}
+
+@Composable
+private fun Reason.label(): String = when (this) {
+    Reason.MatchesContext -> stringResource(R.string.reason_context)
+    is Reason.AboutPassenger -> stringResource(R.string.reason_about, name)
+    is Reason.SharesInterest -> stringResource(R.string.reason_interest, interest)
+}
+
+@Composable
+private fun SavedTopicsScreen(screen: Screen.SavedTopics, send: (Event) -> Unit) {
+    ScreenFrame(
+        title = stringResource(R.string.saved_title),
+        note = stringResource(R.string.saved_context, screen.context),
+        actions = {
+            PleosButton(stringResource(R.string.saved_again), { send(Event.Back) })
+            PleosButton(stringResource(R.string.action_done), { send(Event.Done) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        if (screen.picks.isEmpty()) Text(stringResource(R.string.saved_empty), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        Columns(screen.picks, perRow = 3) { pick ->
+            SelectableCard(selected = false, onSelect = { send(Event.ChooseTopic(pick.topic.id)) }) {
+                Text(pick.topic.text, style = PleosType.BodyLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pick.reasons.forEach { Chip(it.label()) }
+                }
+                Text(stringResource(R.string.saved_open), style = PleosType.LabelMedium, color = PleosColor.FilledEnabled)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event) -> Unit) {
+    val bond = library.bond(screen.riders)
+    val known = library.person(screen.riders.passenger)?.interests.orEmpty()
+    ScreenFrame(
+        title = stringResource(R.string.reflect_title),
+        note = stringResource(R.string.reflect_riders, library.nameOf(screen.riders.driver), library.nameOf(screen.riders.passenger), bond.count + 1),
+        actions = {
+            PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
+            PleosButton(stringResource(R.string.reflect_submit), { send(Event.Submit) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        Text(stringResource(R.string.reflect_flow), style = PleosType.TitleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            listOf(Flow.Smooth to R.string.flow_smooth, Flow.Okay to R.string.flow_okay, Flow.Awkward to R.string.flow_awkward).forEach { (flow, label) ->
+                ChoiceOption(stringResource(label), screen.flow == flow, { send(Event.PickFlow(flow)) }, Modifier.widthIn(min = 260.dp))
+            }
+        }
+        Problems(screen.problems, Problem.NoFlow)
+        LabeledField(
+            label = stringResource(R.string.reflect_discovered),
+            required = false,
+            value = screen.discovered,
+            onValueChange = { send(Event.EditText(it)) },
+            limit = TEXT_LIMIT,
+            error = null,
+            minLines = 1,
+        )
+        if (known.isNotEmpty()) {
+            Text(stringResource(R.string.reflect_known, known.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun DrivingScreen(ui: Ui) {
+    val ride = ui.ride
+    Column(
+        Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding().padding(40.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(stringResource(R.string.driving_title), style = PleosType.HeadlineSmall, modifier = Modifier.semantics { heading() })
+        Text(stringResource(R.string.driving_body), style = PleosType.BodyMedium, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
+        Text(
+            if (ride != null) stringResource(R.string.driving_voice_on, ui.library.nameOf(ride.riders.passenger))
+            else stringResource(R.string.driving_voice_off),
+            style = PleosType.BodySmall,
+            textAlign = TextAlign.Center,
+        )
+    }
+}

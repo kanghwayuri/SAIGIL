@@ -3,27 +3,30 @@ package com.gomsoo.saigil
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import com.gomsoo.saigil.ui.theme.PleosColor
-import com.gomsoo.saigil.ui.theme.PleosType
+import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gomsoo.saigil.screen.Event
+import com.gomsoo.saigil.ui.SaigilApp
 import com.gomsoo.saigil.ui.theme.SaigilTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: SaigilViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             SaigilTheme {
-                Box(Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.app_name), style = PleosType.TitleLarge)
-                }
+                val ui by viewModel.ui.collectAsStateWithLifecycle()
+                SaigilApp(ui, viewModel::send)
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // The microphone belongs to the foreground only.
+        if (!isChangingConfigurations) viewModel.send(Event.PageHidden)
     }
 }
