@@ -1,0 +1,73 @@
+{
+  "packageName": "com.gomsoo.saigil",
+  "appDescription": "SAIGIL helps a driver and a passenger talk on the road by suggesting how to open a topic and which saved topic fits the moment.",
+  "version": "1.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "name": "RECOMMEND_OPENER",
+        "description": "Suggests three different ways to start a conversation about a topic the user names, worded for the person riding with the user.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "The topic the user wants to talk about, in the user's own words."
+            },
+            "companion": {
+              "type": "string",
+              "description": "The saved profile name of the person riding with the user."
+            }
+          },
+          "required": ["topic"]
+        },
+        "component": "service"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "RECOMMEND_SAVED_TOPIC",
+        "description": "Picks up to three topics the user saved earlier that fit the current situation the user describes.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "context": {
+              "type": "string",
+              "description": "The current situation in one or two sentences, in the user's own words."
+            },
+            "companion": {
+              "type": "string",
+              "description": "The saved profile name of the person riding with the user."
+            }
+          },
+          "required": ["context"]
+        },
+        "component": "service"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "SAVE_TOPIC",
+        "description": "Saves a topic the user wants to talk about later.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "The topic to save, in the user's own words."
+            },
+            "companion": {
+              "type": "string",
+              "description": "The saved profile name of the person the topic is about."
+            }
+          },
+          "required": ["topic"]
+        },
+        "component": "service"
+      }
+    }
+  ]
+}
