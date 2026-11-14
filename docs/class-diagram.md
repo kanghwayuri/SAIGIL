@@ -1,247 +1,224 @@
 # 사이길 클래스 다이어그램
 
-기준: 2026-11-14 · 상태: 현재 코드와 최종 기획의 차이 명시
+기준: 2026-11-15 · 설계: [`scenario-v2-design.md`](./scenario-v2-design.md)
 
-이 문서는 현재 Android 프로젝트의 클래스 관계와 최종 기획의 목표 클래스를 **별도 도식**으로 나타낸다. 두 도식 사이에 이름이 비슷해도 구현 완료를 뜻하지 않는다.
+v2 시나리오(프로필·화제 저장, 대화 추천, 능동 음성 추천, Gleo 호출, 함께한 길) 구현의 클래스 관계입니다. 이전 `Session`·`Method` 구조는 삭제했습니다.
 
-## 1. 현재 구현
+## 1. 저장 데이터 (`library/`)
 
 ```mermaid
 classDiagram
-    class MainActivity {
-        -SessionViewModel viewModel
-        +onCreate(Bundle)
-        +onStop()
+    class Library {
+        +List~Person~ people
+        +List~Topic~ topics
+        +List~Ride~ rides
+        +upsert(Person) Library
+        +add(Topic) Library
+        +markUsed(TopicId, Long) Library
+        +record(Ride) Library
+        +bond(Riders) Bond
     }
-    class SessionViewModel {
-        -MutableStateFlow~Model~ state
-        +StateFlow~Model~ model
+    class Person {
+        +PersonId id
+        +String name
+        +Relation relation
+        +List~String~ places
+        +List~String~ interests
+    }
+    class Topic {
+        +TopicId id
+        +String text
+        +Set~PersonId~ about
+        +Long addedAt
+        +Long? usedAt
+    }
+    class Ride {
+        +PersonId driver
+        +PersonId passenger
+        +Long at
+        +Flow flow
+        +List~String~ discovered
+    }
+    class Bond {
+        +Int count
+        +Flow? lastFlow
+        +List~String~ discovered
+    }
+    class LibraryStore {
+        +StateFlow~Library~ library
+        +update(change) Library
+    }
+    Library *-- Person
+    Library *-- Topic
+    Library *-- Ride
+    Library ..> Bond : derives from rides
+    LibraryStore --> Library : filesDir/library.json
+```
+
+- `Relation.register`는 동승자가 `Parent`면 `Formal`(존댓말), 그 외에는 `Casual`(반말)입니다.
+- 관계 데이터(`Bond`)는 저장하지 않고 `Ride` 목록에서 매번 계산합니다.
+- `LibraryStore.update`는 임시 파일에 쓴 뒤 rename하고, 쓰기가 끝난 다음에 `StateFlow` 값을 바꿉니다.
+
+## 2. 추천 엔진 (`recommend/`, 순수 Kotlin)
+
+```mermaid
+classDiagram
+    class Recommend {
+        <<functions>>
+        +openers(topic, Riders, Library) List~Opener~
+        +topicsFor(context, Riders, Library, now) List~TopicPick~
+        +proactive(Trigger, Riders, Library, said, now) Suggestion?
+    }
+    class Opener {
+        +Approach approach
+        +String first
+        +String followUp
+    }
+    class TopicPick {
+        +Topic topic
+        +List~Reason~ reasons
+    }
+    class Suggestion {
+        +String key
+        +String sentence
+    }
+    class Catalog {
+        <<data>>
+        openerTemplates: Approach x 2
+        trending: 8
+        balanceGames: 10
+    }
+    Recommend --> Catalog
+    Recommend --> Opener
+    Recommend --> TopicPick
+    Recommend --> Suggestion
+```
+
+- `topicsFor`는 한글 글자 bigram 겹침(맥락 x3), 동승자 관심사·장소 겹침(+1), `about`에 동승자 포함(+2), 다른 사람 화제(-1), 3일 안에 쓴 화제(-2)로 점수를 냅니다.
+- `proactive`는 저장 화제 → 요즘 이야깃거리 → 밸런스 게임 순서이고, `said`에 있는 key는 건너뜁니다.
+
+## 3. 화면 (`screen/`, `ui/`)
+
+```mermaid
+classDiagram
+    class SaigilViewModel {
+        +StateFlow~Ui~ ui
         +send(Event)
     }
     class Model {
-        +Session session
+        +Screen screen
         +Restriction vehicle
     }
-    class Session {
-        <<sealed interface>>
-    }
-    class Preparing {
-        <<sealed interface>>
-    }
-    class Start {
-        +Role? role
-        +Int step
-        +Map~StartField,String~ details
-        +Boolean alone
-        +Boolean parked
-    }
-    class Situation {
-        +Role role
-        +Profile profile
-        +Purpose? purpose
-        +Known? known
-    }
-    class Methods {
-        +Situation situation
-        +Method? chosen
-        +List~Recommended~ cards
-    }
-    class Compose {
-        +Role role
-        +Material material
-        +Method method
-    }
-    class Edit {
-        +Role role
-        +Material material
-        +String result
-        +Method method
-    }
-    class GuideChoice {
-        +Role role
-        +Method method
-        +Guide guide
-    }
-    class Ready {
-        +Guide guide
-        +Role role
-        +Method? method
-    }
-    class Method {
-        <<enumeration>>
-        +Approach approach
-        +Set~Purpose~ purposes
-        +Need? needs
-        +Style? suits
-        +firstWords(Role) String
-        +List~String~ respond
-    }
-    class Recommended {
-        +Method method
-        +List~String~ reasons
-    }
-    class Recommend {
+    class reduce {
         <<function>>
-        +recommend(Purpose?, Known?, Profile) List~Recommended~
+        (Model, Event, Library, Stamp) Next
     }
-    class GuideWaiting
-    class Ended
-    class Protected
-    class Material {
-        <<sealed interface>>
+    class Next {
+        +Model model
+        +List~Effect~ effects
     }
-    class Story {
-        +String scene
-        +String feeling
-        +String choice
-        +String leftover
+    class Screen {
+        <<sealed>>
+        Home, People, PersonEdit, TopicCapture
+        PickPair, ChooseInput, Listen
+        Openers, SavedTopics, Reflect
     }
-    class Interest {
-        +String topic
-        +String source
+    class Effect {
+        <<sealed>>
+        Write: PutPerson, AddTopic, UseTopic, RecordRide
+        BeginRide, StartListening, StopListening
     }
-    class Event {
-        <<sealed interface>>
+    class SpeechInput {
+        <<interface>>
+        +start(onHeard)
+        +stop()
+        +release()
     }
-    class Restriction {
-        <<enumeration>>
-        Parked
-        Restricted
-        Unknown
-    }
-    class VehicleRestrictions {
-        <<function>>
-        +vehicleRestrictions(Context) Flow~Restriction~
-    }
-    class SessionReducer {
-        <<function>>
-        +reduce(Model, Event) Model
-    }
-    class SaigilApp {
-        <<composable function>>
-        +render(Model, send, close)
-    }
-    MainActivity --> SessionViewModel
-    MainActivity --> SaigilApp
-    SessionViewModel --> Model
-    SessionViewModel --> VehicleRestrictions
-    SessionViewModel --> SessionReducer
-    Model *-- Session
-    Model --> Restriction
-    Session <|-- Preparing
-    Preparing <|.. Start
-    Preparing <|.. Situation
-    Preparing <|.. Methods
-    Preparing <|.. Compose
-    Preparing <|.. Edit
-    Preparing <|.. GuideChoice
-    Session <|.. Ready
-    Session <|.. GuideWaiting
-    Session <|.. Ended
-    Session <|.. Protected
-    Methods *-- Situation
-    Methods ..> Recommend : cards
-    Recommend --> Recommended
-    Recommended --> Method
-    Compose --> Method
-    Edit --> Method
-    GuideChoice --> Method
-    Ready --> Method
-    Compose --> Material
-    Edit --> Material
-    Material <|.. Story
-    Material <|.. Interest
-    SessionReducer --> Event
+    class PleosSpeechInput
+    SaigilViewModel --> reduce
+    reduce --> Next
+    Next --> Model
+    Next --> Effect
+    Model --> Screen
+    SaigilViewModel --> SpeechInput
+    PleosSpeechInput ..|> SpeechInput
+    SaigilViewModel --> LibraryStore : Effect.Write
+    SaigilViewModel --> Rides : Effect.BeginRide
 ```
 
-`VehicleRestrictions`·`SessionReducer`·`Recommend`·`SaigilApp`은 Kotlin **최상위 함수**를 도식용 상자로 표시한 것이며 실제 클래스가 아니다. `Session` 하위 형식은 각각 화면 상태다. `SessionViewModel`은 메모리 `StateFlow`를 보유하고 `vehicleRestrictions()`가 AAOS `CarUxRestrictionsManager`에서 받은 상태를 `Event.VehicleChanged`로 전달한다. `SaigilApp`이 화면 상태에 따라 Compose 화면을 선택한다. `Preparing`을 구현한 화면은 중단·페이지 숨김·주차가 아닌 차량 상태에서 `Protected`로 바뀐다. 방법 카탈로그는 `session/Methods.kt`의 `Method` enum 하나이고, `recommend()`가 W09 선택과 W01 동승자 정보(`Profile`)에서 서로 다른 방법 3장을 고른다. 카드는 `Methods.cards`에서 매번 계산하며 저장하지 않는다. 현재 앱에는 회고 저장소, 선호 학습, NaviHelper 호출이 없다.
+- reducer는 순수 함수입니다. 시각과 새 id는 `Stamp`로 받고, 저장·음성 인식·active ride는 `Effect`로 돌려줍니다.
+- `TopicCapture`와 `Listen`은 `Capture(stt, text)`를 가집니다. `stt`는 `Idle | Listening(partial) | Failed(reason)`이고, 전사 결과는 `text`에 들어가 사용자가 고칠 수 있습니다.
+- 주행 제한(`Restriction.Restricted`)이면 UI는 어느 화면이든 Driving 안내를 그리고, reducer는 입력 이벤트를 무시하며 듣기를 멈춥니다. 주차하면 원래 화면으로 돌아옵니다.
 
-## 2. 최종 기획 목표 모델 — 일부 구현
+## 4. 주행 중 능동 추천 (`drive/`)
 
 ```mermaid
 classDiagram
-    class ConversationContext {
-        +Purpose purpose
-        +Boolean knownTopic
-        +Boolean positiveNews
-        +BurdenLevel burden
-        +Boolean preparationPossible
-        +Boolean refusalKnown
+    class SaigilApplication {
+        +LibraryStore store
+        +Rides rides
+        +RideCompanion companion
     }
-    class MethodDefinition {
-        +String methodId
-        +String name
-        +String evidenceRef
-        +Set~Condition~ includeWhen
-        +Set~Condition~ excludeWhen
-        +String startAction
-        +String followUpAction
-        +String stopCondition
+    class Rides {
+        +StateFlow~ActiveRide?~ active
+        +begin(Riders)
+        +said(key)
     }
-    class RecommendationPolicy {
-        +String policyVersion
-        +recommend(ConversationContext) List~RecommendationCard~
+    class ActiveRide {
+        +Riders riders
+        +Set~String~ said
     }
-    class RecommendationCard {
-        +String methodId
-        +Int position
-        +String reason
-        +String startAction
-        +String followUpAction
-        +String stopCondition
+    class RideCompanion {
+        +start()
+        +onTrigger(Trigger)
     }
-    class PreparedPlan {
-        +String methodId
-        +String policyVersion
-        +Boolean ready
-        +String? ownExperience
+    class decide {
+        <<function>>
+        (Trigger, ActiveRide?, Library, spokenAt, now) Decision
     }
-    class Reflection {
-        +String methodId
-        +AttemptStatus attempt
-        +Boolean? suitable
-        +Boolean? burdensome
-        +Boolean? chooseAgain
+    class DebugTriggerReceiver {
+        <<debug only>>
     }
-    class DrivingGate {
-        +Restriction restriction
-        +Boolean signalValid
-        +canEdit() Boolean
-    }
-    class PreparationCoordinator {
-        +submitContext(ConversationContext)
-        +selectMethod(String)
-        +confirmPlan()
-        +finishOrSkip()
-    }
-    class ReflectionRecorder {
-        +recordOptional(Reflection)
-    }
-    PreparationCoordinator --> ConversationContext
-    PreparationCoordinator --> RecommendationPolicy
-    RecommendationPolicy --> "3" RecommendationCard : normal path
-    RecommendationCard --> MethodDefinition : selected from approved catalog
-    PreparationCoordinator --> PreparedPlan
-    PreparationCoordinator --> DrivingGate
-    ReflectionRecorder --> Reflection
-    Reflection --> PreparedPlan : optional follow-up
+    SaigilApplication --> Rides
+    SaigilApplication --> RideCompanion
+    Rides --> ActiveRide
+    RideCompanion --> decide
+    RideCompanion --> NaviHelper : onTBTInfo, onRouteStateInfo
+    RideCompanion --> TextToSpeech : ON_DEVICE, ko-KR
+    DebugTriggerReceiver --> RideCompanion
 ```
 
-기획의 정상 경로는 `ConversationContext`로 승인된 `MethodDefinition`의 포함·제외 조건을 평가해 **서로 다른 methodId의 카드 3개**를 만든다. 적합한 방법이 3개 미만이거나 거절·준비 불가가 알려지면 보류한다. 카드 선택만으로 `PreparedPlan.ready`가 되지 않고 사용자의 준비 완료 동작이 필요하다. `ownExperience`는 ‘내 경험 나누기’ 방법에서만 선택 입력이다. `Reflection`은 선택적이며 상대의 발화 원문을 저장하지 않는다. `DrivingGate`는 제한·신호 미확인일 때 편집을 막는다. 세부 인터페이스 이름과 필드는 구현 제안이며 확정 API가 아니다.
+- `longDriveFrom`: 첫 TBT가 `TURN_ENTER_IC_*`이고 500 m 이내면 `LongDrive`. `jamFrom`: `SLOW`·`HEAVY` 정체가 300 m 이내면 `Jam`.
+- `decide`는 active ride가 없으면 `NoRide`, 같은 종류를 10분 안에 말했으면 `CoolingDown`입니다.
+- active ride는 프로세스 메모리에만 있습니다. 첫 `BeginRide` 때 NaviHelper와 TTS를 연결합니다.
 
-## 차이와 구현 경계
+## 5. Gleo AI (`gleo/`)
 
-| 최종 기획 | 현재 코드 | 다음 구현 때 바뀔 부분 |
-|---|---|---|
-| 짧은 맥락 선택 | `Situation`의 목적·소재 종류와 `Profile` | 부담·거절 여부는 아직 없음 |
-| 승인 방법에서 서로 다른 카드 3개 | `Method` 카탈로그와 `recommend()` | 제외 규칙·정책 버전·근거 출처는 아직 없음 |
-| 하나 선택 후 행동 안내·준비 완료 | `Methods`에서 고르고 `Ready`가 첫마디·이어 가기·멈춤 안내 표시. 내 경험 나누기는 `Compose`·`Edit`·`GuideChoice`를 거침 | 카드 선택과 `plan_ready` 분리는 아직 없음 |
-| 주행 중 선택·입력 제한 | `Restriction`·`vehicleRestrictions()`·`Protected` | 실제 Pleos 전환 지연·지역별 제한·연결 손실 검증 필요 |
-| 도착 후 선택 회고 | 없음 | 선택적 회고와 연구 동의별 분석 분리 필요 |
+```mermaid
+classDiagram
+    class GleoReceiver {
+        +onReceive(Context, Intent)
+    }
+    class answer {
+        <<function>>
+        (Function, params, Library, ActiveRide?, Stamp) Answer
+    }
+    class Answer {
+        +Status status
+        +String message
+        +JsonArray? data
+        +Effect.Write? write
+    }
+    class Function {
+        <<enum>>
+        RECOMMEND_OPENER
+        RECOMMEND_SAVED_TOPIC
+        SAVE_TOPIC
+    }
+    GleoReceiver --> answer
+    answer --> Answer
+    GleoReceiver --> LibraryStore : Answer.write
+    GleoReceiver ..> APP_ACTION_RESPONSE : broadcast within 6 s
+```
 
-현재 프로토타입을 최종 추천 기능의 완성으로 설명하지 않는다. 자료의 ‘NaviHelper’는 선택형 안내의 경로 맥락 후보이며 이 앱이 자체 길 안내 앱이라는 뜻은 아니다. 데이터베이스와 LLM 클래스는 현재 코드나 확정 범위에 없으므로 도식에 넣지 않았다.
-
-## 근거
-
-- 최종 기획: `제출할 서류/05_validation_upgrade/02_앱프로젝트소개_심사자료_상세기획서.md`의 3장 F1~F5, 5장 구현 전략.
-- 현재 코드: `session/Session.kt`, `session/Methods.kt`, `SessionViewModel.kt`, `vehicle/VehicleRestrictions.kt`, `MainActivity.kt`, `ui/Screens.kt`.
+- 함수 선언은 `app/src/main/assets/schema.json`에 있습니다. `companion`이 없으면 active ride의 동승자를 쓰고, 둘 다 없으면 `asking`으로 누구와 타는지 되묻습니다.
