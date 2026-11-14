@@ -30,6 +30,7 @@ object Limit {
 
 enum class Problem {
     NoRole, NotAlone, NotParkedConfirmed, VehicleNotParked,
+    NoMethod,
     NoScene, NoTopic, NoSource,
     BlankResult,
 }
@@ -49,10 +50,31 @@ sealed interface Session {
         val problems: Set<Problem> = emptySet(),
     ) : Preparing
 
-    /** W02 for a [Material.Story], W02B for a [Material.Interest]. */
+    /** W09. Choices only, no personal text. */
+    data class Situation(
+        val role: Role,
+        val profile: Profile,
+        val purpose: Purpose? = null,
+        val known: Known? = null,
+    ) : Preparing
+
+    /**
+     * W10. The cards are derived from [situation] on every read and never stored, so Previous
+     * restores the W09 choices and the next Next recomputes them. [chosen] is null or one of [cards].
+     */
+    data class Methods(
+        val situation: Situation,
+        val chosen: Method? = null,
+        val problems: Set<Problem> = emptySet(),
+    ) : Preparing {
+        val cards: List<Recommended> get() = recommend(situation.purpose, situation.known, situation.profile)
+    }
+
+    /** W02 for a [Material.Story], W02B for a [Material.Interest]. [method] is the Share card being prepared. */
     data class Compose(
         val role: Role,
         val material: Material,
+        val method: Method,
         val problems: Set<Problem> = emptySet(),
     ) : Preparing
 
@@ -61,15 +83,19 @@ sealed interface Session {
         val role: Role,
         val material: Material,
         val result: String,
+        val method: Method,
         val showSource: Boolean = false,
         val problems: Set<Problem> = emptySet(),
     ) : Preparing
 
     /** W04 */
-    data class GuideChoice(val guide: Guide = Guide.Off) : Preparing
+    data class GuideChoice(val role: Role, val method: Method, val guide: Guide = Guide.Off) : Preparing
 
-    /** W05 */
-    data class Ready(val guide: Guide) : Session
+    /**
+     * W05. Holds only catalog text, so it survives PageHidden while parked and goes once driving starts.
+     * [role] picks the register of the first words. [method] is null when the user left W10 without a card.
+     */
+    data class Ready(val guide: Guide, val role: Role, val method: Method?) : Session
 
     /** W06 */
     data object GuideWaiting : Session
@@ -103,6 +129,10 @@ sealed interface Event {
     data object Abort : Event
     data object PageHidden : Event
     data class VehicleChanged(val restriction: Restriction) : Event
+    data class SetPurpose(val purpose: Purpose?) : Event
+    data class SetKnown(val known: Known?) : Event
+    data class ChooseMethod(val method: Method) : Event
+    data object SkipMethod : Event
     data object Restart : Event
 }
 
@@ -155,11 +185,13 @@ fun reduce(model: Model, event: Event): Model {
     }
     val next = when (session) {
         is Session.Start -> onStart(session, event, model.vehicle)
+        is Session.Situation -> onSituation(session, event)
+        is Session.Methods -> onMethods(session, event)
         is Session.Compose -> onCompose(session, event)
         is Session.Edit -> onEdit(session, event)
         is Session.GuideChoice -> when (event) {
             is Event.ChooseGuide -> session.copy(guide = event.guide)
-            Event.Finish -> Session.Ready(session.guide)
+            Event.Finish -> Session.Ready(session.guide, session.role, session.method)
             else -> session
         }
         is Session.Ended, Session.Protected ->
@@ -197,11 +229,33 @@ private fun onStart(start: Session.Start, event: Event, vehicle: Restriction): S
             if (start.step == 0 && start.role == null) return start.copy(problems = setOf(Problem.NoRole))
             if (start.step < 3) return start.copy(step = start.step + 1, problems = emptySet())
             val found = problems(start, vehicle)
-            return if (found.isEmpty()) Session.Compose(start.role!!, Material.Story()) else start.copy(problems = found)
+            return if (found.isEmpty()) Session.Situation(start.role!!, profileOf(start.details)) else start.copy(problems = found)
         }
         else -> return start
     }
     return if (edited.problems.isEmpty()) edited else edited.copy(problems = problems(edited, vehicle))
+}
+
+private fun onSituation(situation: Session.Situation, event: Event): Session = when (event) {
+    is Event.SetPurpose -> situation.copy(purpose = event.purpose)
+    is Event.SetKnown -> situation.copy(known = event.known)
+    Event.Next -> Session.Methods(situation)
+    else -> situation
+}
+
+private fun onMethods(methods: Session.Methods, event: Event): Session = when (event) {
+    is Event.ChooseMethod ->
+        if (methods.cards.any { it.method == event.method }) methods.copy(chosen = event.method, problems = emptySet()) else methods
+    Event.Previous -> methods.situation
+    Event.SkipMethod -> Session.Ready(Guide.Off, methods.situation.role, method = null)
+    Event.Next -> {
+        val role = methods.situation.role
+        when (val chosen = methods.chosen) {
+            null -> methods.copy(problems = setOf(Problem.NoMethod))
+            else -> if (chosen.needsOwnStory) Session.Compose(role, Material.Story(), chosen) else Session.Ready(Guide.Off, role, chosen)
+        }
+    }
+    else -> methods
 }
 
 private fun onCompose(compose: Session.Compose, event: Event): Session = when (event) {
@@ -216,11 +270,11 @@ private fun onCompose(compose: Session.Compose, event: Event): Session = when (e
             )
         }
     }
-    Event.SwitchToInterest -> Session.Compose(compose.role, Material.Interest())
-    Event.SwitchToStory -> Session.Compose(compose.role, Material.Story())
+    Event.SwitchToInterest -> Session.Compose(compose.role, Material.Interest(), compose.method)
+    Event.SwitchToStory -> Session.Compose(compose.role, Material.Story(), compose.method)
     Event.Next -> {
         val found = problems(compose.material)
-        if (found.isEmpty()) Session.Edit(compose.role, compose.material, compose.material.draft())
+        if (found.isEmpty()) Session.Edit(compose.role, compose.material, compose.material.draft(), compose.method)
         else compose.copy(problems = found)
     }
     else -> compose
@@ -234,7 +288,7 @@ private fun onEdit(edit: Session.Edit, event: Event): Session = when (event) {
     Event.ToggleSource -> edit.copy(showSource = !edit.showSource)
     Event.Next -> {
         val found = problems(edit.result)
-        if (found.isEmpty()) Session.GuideChoice() else edit.copy(problems = found)
+        if (found.isEmpty()) Session.GuideChoice(edit.role, edit.method) else edit.copy(problems = found)
     }
     else -> edit
 }
