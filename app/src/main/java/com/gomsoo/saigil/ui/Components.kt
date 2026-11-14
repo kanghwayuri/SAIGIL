@@ -2,11 +2,14 @@ package com.gomsoo.saigil.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -120,6 +123,30 @@ fun ChoiceOption(text: String, selected: Boolean, onSelect: () -> Unit, modifier
     ) {
         Text(text, style = PleosType.BodyLarge, color = if (selected) PleosColor.TextOnFilled else PleosColor.TextPrimary, textAlign = TextAlign.Center)
     }
+}
+
+/** A tappable card for long content. Selection shows as a border plus the caller's own label, not color alone. */
+@Composable
+fun SelectableCard(
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(32.dp)
+    Column(
+        modifier = modifier
+            .shrinkWhenPressed(interaction)
+            .clip(shape)
+            .background(PleosColor.BackgroundSecondary)
+            .border(4.dp, if (selected) PleosColor.FilledEnabled else PleosColor.BackgroundSecondary, shape)
+            .clickable(interaction, indication = null, role = Role.Button, onClick = onSelect)
+            .semantics { stateDescription = if (selected) "선택됨" else "선택 안 됨" }
+            .padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        content = content,
+    )
 }
 
 @Composable

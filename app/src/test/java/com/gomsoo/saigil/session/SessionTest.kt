@@ -11,8 +11,8 @@ class SessionTest {
 
     private val parkedStart = Model().after(Event.VehicleChanged(Restriction.Parked))
 
-    private val atCompose = parkedStart.after(
-        Event.SelectRole(Role.Parent),
+    private fun readyToChoose(role: Role) = parkedStart.after(
+        Event.SelectRole(role),
         Event.SetAlone(true),
         Event.SetParked(true),
         Event.Next,
@@ -20,6 +20,12 @@ class SessionTest {
         Event.Next,
         Event.Next,
     )
+
+    private val atSituation = readyToChoose(Role.Parent)
+
+    private val atMethods = atSituation.after(Event.Next)
+
+    private val atCompose = atMethods.after(Event.ChooseMethod(Method.ShareScene), Event.Next)
 
     private val story = Material.Story(
         scene = "hesitated in the meeting",
@@ -45,16 +51,136 @@ class SessionTest {
     }
 
     @Test
-    fun mainPathEndsReadyWithChosenGuideAndNoContent() {
+    fun shareCardOpensOwnStoryAndCarriesTheCardToReady() {
+        assertEquals(Session.Compose(Role.Parent, Material.Story(), Method.ShareScene), atCompose.session)
+
         val ready = atGuideChoice.after(Event.ChooseGuide(Guide.OnceGeneric), Event.Finish)
 
-        assertEquals(Session.Ready(Guide.OnceGeneric), ready.session)
+        assertEquals(Session.Ready(Guide.OnceGeneric, Role.Parent, Method.ShareScene), ready.session)
         assertHoldsNoPersonalText(ready)
     }
 
     @Test
     fun guideDefaultsToOff() {
-        assertEquals(Session.Ready(Guide.Off), atGuideChoice.after(Event.Finish).session)
+        assertEquals(Session.Ready(Guide.Off, Role.Parent, Method.ShareScene), atGuideChoice.after(Event.Finish).session)
+    }
+
+    @Test
+    fun startNextOpensSituationWithParsedProfile() {
+        val situation = parkedStart.after(
+            Event.SelectRole(Role.Parent),
+            Event.Next,
+            Event.Next,
+            Event.SetStartDetail(StartField.CompanionStyle, "차분"),
+            Event.SetStartDetail(StartField.CompanionInterest, "음악"),
+            Event.Next,
+            Event.SetAlone(true),
+            Event.SetParked(true),
+            Event.Next,
+        )
+
+        assertEquals(Session.Situation(Role.Parent, Profile(Style.Calm, Interest.Music)), situation.session)
+    }
+
+    @Test
+    fun situationIsFullySkippable() {
+        assertEquals(Session.Methods(Session.Situation(Role.Parent, Profile())), atMethods.session)
+        assertEquals(3, (atMethods.session as Session.Methods).cards.size)
+    }
+
+    @Test
+    fun choosingTheSamePurposeAgainClearsIt() {
+        val cleared = atSituation.after(
+            Event.SetPurpose(Purpose.Listen),
+            Event.SetKnown(Known.Earlier),
+            Event.SetPurpose(null),
+            Event.SetKnown(null),
+        )
+
+        assertEquals(Session.Situation(Role.Parent, Profile()), cleared.session)
+    }
+
+    @Test
+    fun proposalSceneShowsCheerAskListenCards() {
+        val methods = atSituation.after(Event.SetPurpose(Purpose.Celebrate), Event.SetKnown(Known.GoodNews), Event.Next)
+
+        assertEquals(
+            listOf(Method.CheerFirst, Method.AskOneMore, Method.ListenBack),
+            (methods.session as Session.Methods).cards.map { it.method },
+        )
+    }
+
+    @Test
+    fun methodsNextNeedsAChoice() {
+        val blocked = atMethods.after(Event.Next)
+        assertEquals(setOf(Problem.NoMethod), (blocked.session as Session.Methods).problems)
+
+        val chosen = blocked.after(Event.ChooseMethod(Method.AskEasy))
+        assertEquals(emptySet<Problem>(), (chosen.session as Session.Methods).problems)
+    }
+
+    @Test
+    fun chooseMethodIgnoresACardNotShown() {
+        assertEquals(atMethods, atMethods.after(Event.ChooseMethod(Method.CheerFirst)))
+    }
+
+    @Test
+    fun previousFromMethodsKeepsTheSituationAndDropsTheChoice() {
+        val situation = atSituation.after(Event.SetPurpose(Purpose.Continue), Event.SetKnown(Known.Earlier))
+        val back = situation.after(Event.Next, Event.ChooseMethod(Method.AskOneMore), Event.Previous)
+        assertEquals(situation.session, back.session)
+
+        val again = back.after(Event.Next).session as Session.Methods
+        assertEquals(null, again.chosen)
+    }
+
+    @Test
+    fun nonShareCardGoesStraightToReadyWithGuideOff() {
+        val ready = atSituation.after(Event.SetPurpose(Purpose.Celebrate), Event.Next, Event.ChooseMethod(Method.CheerFirst), Event.Next)
+
+        assertEquals(Session.Ready(Guide.Off, Role.Parent, Method.CheerFirst), ready.session)
+    }
+
+    @Test
+    fun leavingWithoutACardEndsReadyWithNoCard() {
+        val ready = atMethods.after(Event.ChooseMethod(Method.AskEasy), Event.SkipMethod)
+
+        assertEquals(Session.Ready(Guide.Off, Role.Parent, null), ready.session)
+    }
+
+    @Test
+    fun firstWordsFollowWhoIsSpeaking() {
+        fun firstWords(role: Role): String {
+            val ready = readyToChoose(role).after(
+                Event.SetPurpose(Purpose.Celebrate),
+                Event.Next,
+                Event.ChooseMethod(Method.CheerFirst),
+                Event.Next,
+            ).session as Session.Ready
+            return ready.method!!.firstWords(ready.role)
+        }
+
+        assertEquals("소식 들었어요. 정말 잘됐어요!", firstWords(Role.Child))
+        assertEquals("소식 들었어. 정말 잘됐다!", firstWords(Role.Parent))
+        assertEquals("소식 들었어. 정말 잘됐다!", firstWords(Role.Friend))
+    }
+
+    @Test
+    fun readySurvivesPageHiddenWhileParked() {
+        val ready = atMethods.after(Event.ChooseMethod(Method.AskEasy), Event.Next)
+
+        assertEquals(ready, ready.after(Event.PageHidden))
+    }
+
+    @Test
+    fun readyCardIsGoneOnceDriving() {
+        val withCard = atMethods.after(Event.ChooseMethod(Method.AskEasy), Event.Next)
+
+        listOf(Restriction.Restricted, Restriction.Unknown).forEach { restriction ->
+            val driving = withCard.after(Event.VehicleChanged(restriction))
+            assertEquals(Session.Ended, driving.session)
+            assertFalse(driving.toString().contains(Method.AskEasy.name))
+        }
     }
 
     @Test
@@ -79,7 +205,7 @@ class SessionTest {
 
         assertEquals(setOf(Problem.VehicleNotParked), (stuck.session as Session.Start).problems)
         assertEquals(
-            Session.Compose(Role.Child, Material.Story()),
+            Session.Situation(Role.Child, Profile()),
             stuck.after(Event.VehicleChanged(Restriction.Parked), Event.Next).session,
         )
     }
@@ -106,6 +232,8 @@ class SessionTest {
     fun preparationEndsProtectedWithNothingLeftOnAnyInterruption() {
         val steps = mapOf(
             "W01" to parkedStart.after(Event.SelectRole(Role.Parent), Event.SetAlone(true)),
+            "W09" to atSituation.after(Event.SetPurpose(Purpose.Listen), Event.SetKnown(Known.Earlier)),
+            "W10" to atMethods.after(Event.ChooseMethod(Method.AskEasy)),
             "W02" to atCompose.after(Event.EditMaterial(story)),
             "W02B" to atCompose.after(
                 Event.SwitchToInterest,
@@ -154,7 +282,7 @@ class SessionTest {
     fun switchingToInterestClearsTheStory() {
         val interest = atCompose.after(Event.EditMaterial(story), Event.SwitchToInterest)
 
-        assertEquals(Session.Compose(Role.Parent, Material.Interest()), interest.session)
+        assertEquals(Session.Compose(Role.Parent, Material.Interest(), Method.ShareScene), interest.session)
         assertHoldsNoPersonalText(interest)
     }
 
@@ -166,7 +294,7 @@ class SessionTest {
             Event.SwitchToStory,
         )
 
-        assertEquals(Session.Compose(Role.Parent, Material.Story()), back.session)
+        assertEquals(Session.Compose(Role.Parent, Material.Story(), Method.ShareScene), back.session)
         assertHoldsNoPersonalText(back)
     }
 

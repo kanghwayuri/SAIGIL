@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,14 +49,22 @@ import androidx.compose.ui.unit.sp
 import com.gomsoo.saigil.R
 import com.gomsoo.saigil.session.Event
 import com.gomsoo.saigil.session.Guide
+import com.gomsoo.saigil.session.Interest
+import com.gomsoo.saigil.session.Known
 import com.gomsoo.saigil.session.Limit
 import com.gomsoo.saigil.session.Material
+import com.gomsoo.saigil.session.Method
 import com.gomsoo.saigil.session.Model
 import com.gomsoo.saigil.session.Problem
+import com.gomsoo.saigil.session.Purpose
+import com.gomsoo.saigil.session.Recommended
 import com.gomsoo.saigil.session.Restriction
 import com.gomsoo.saigil.session.Role
 import com.gomsoo.saigil.session.Session
+import com.gomsoo.saigil.session.STOP
 import com.gomsoo.saigil.session.StartField
+import com.gomsoo.saigil.session.Style
+import com.gomsoo.saigil.session.UNSURE
 import com.gomsoo.saigil.ui.theme.PleosColor
 import com.gomsoo.saigil.ui.theme.PleosType
 
@@ -63,18 +73,15 @@ fun SaigilApp(model: Model, send: (Event) -> Unit, close: () -> Unit) {
     val parked = model.vehicle == Restriction.Parked
     when (val session = model.session) {
         is Session.Start -> StartScreen(session, send)
+        is Session.Situation -> SituationScreen(session, send)
+        is Session.Methods -> MethodsScreen(session, send)
         is Session.Compose -> when (val material = session.material) {
             is Material.Story -> StoryScreen(material, session.problems, send)
             is Material.Interest -> InterestScreen(material, session.problems, send)
         }
         is Session.Edit -> EditScreen(session, send)
         is Session.GuideChoice -> GuideScreen(session.guide, send)
-        is Session.Ready -> NoticeScreen(
-            title = stringResource(R.string.ready_title),
-            body = stringResource(if (session.guide == Guide.OnceGeneric) R.string.ready_guide_once else R.string.ready_guide_off),
-        ) {
-            PleosButton(stringResource(R.string.ready_close), close, style = ButtonStyle.Primary)
-        }
+        is Session.Ready -> ReadyScreen(session, close)
         Session.GuideWaiting -> NoticeScreen(
             title = stringResource(R.string.waiting_title),
             body = stringResource(R.string.waiting_body),
@@ -139,6 +146,7 @@ private fun Problem.message(): String = stringResource(
         Problem.NotAlone -> R.string.problem_not_alone
         Problem.NotParkedConfirmed -> R.string.problem_not_parked_confirmed
         Problem.VehicleNotParked -> R.string.problem_vehicle_not_parked
+        Problem.NoMethod -> R.string.problem_no_method
         Problem.NoScene -> R.string.problem_no_scene
         Problem.NoTopic -> R.string.problem_no_topic
         Problem.NoSource -> R.string.problem_no_source
@@ -157,7 +165,7 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
         actions = {
             if (start.step > 0) PleosButton("이전", { send(Event.Previous) })
             else PleosButton(stringResource(R.string.start_quit), { send(Event.Abort) })
-            PleosButton(if (start.step == 3) "이야기 시작" else "다음", { send(Event.Next) }, style = ButtonStyle.Primary)
+            PleosButton("다음", { send(Event.Next) }, style = ButtonStyle.Primary)
         },
     ) {
         GrowthProgress(start.step + 1, 4)
@@ -187,8 +195,8 @@ private fun StartScreen(start: Session.Start, send: (Event) -> Unit) {
                 Text("정확히 몰라도 괜찮아요. 떠오르는 것만 골라 주세요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
                 ProfileChoices("나이대", StartField.CompanionAge, listOf("10대", "20대", "30대", "40대", "50대 이상"), start, send)
                 ProfileChoices("성별", StartField.CompanionGender, listOf("여성", "남성", "응답 안 함"), start, send)
-                ProfileChoices("평소 모습", StartField.CompanionStyle, listOf("활발", "차분", "모르겠어요"), start, send)
-                ProfileChoices("관심사", StartField.CompanionInterest, listOf("음악", "운동", "여행", "음식", "모르겠어요"), start, send)
+                ProfileChoices("평소 모습", StartField.CompanionStyle, Style.entries.map { it.label } + UNSURE, start, send)
+                ProfileChoices("관심사", StartField.CompanionInterest, Interest.entries.map { it.label } + UNSURE, start, send)
             }
             else -> {
                 Text("이야기는 차를 세우고, 혼자 있을 때 준비해요.", style = PleosType.BodySmall, color = PleosColor.TextSecondary)
@@ -209,6 +217,129 @@ private fun ProfileChoices(label: String, field: StartField, choices: List<Strin
         choices.forEach { value ->
             ChoiceOption(value, start.details[field] == value, { send(Event.SetStartDetail(field, value)) })
         }
+    }
+}
+
+@Composable
+private fun SituationScreen(situation: Session.Situation, send: (Event) -> Unit) {
+    ScreenFrame(
+        title = stringResource(R.string.situation_title),
+        actions = {
+            PleosButton(stringResource(R.string.action_abort), { send(Event.Abort) })
+            PleosButton(stringResource(R.string.situation_next), { send(Event.Next) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        Text(stringResource(R.string.situation_note), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        Text(stringResource(R.string.situation_purpose), style = PleosType.TitleSmall, color = PleosColor.TextSecondary)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Purpose.entries.forEach { purpose ->
+                val selected = situation.purpose == purpose
+                ChoiceOption(purpose.label, selected, { send(Event.SetPurpose(if (selected) null else purpose)) })
+            }
+        }
+        Text(stringResource(R.string.situation_known), style = PleosType.TitleSmall, color = PleosColor.TextSecondary)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Known.entries.forEach { known ->
+                val selected = situation.known == known
+                ChoiceOption(known.label, selected, { send(Event.SetKnown(if (selected) null else known)) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun MethodsScreen(methods: Session.Methods, send: (Event) -> Unit) {
+    val role = methods.situation.role
+    ScreenFrame(
+        title = stringResource(R.string.methods_title),
+        actions = {
+            PleosButton(stringResource(R.string.action_abort), { send(Event.Abort) })
+            PleosButton(stringResource(R.string.methods_change), { send(Event.Previous) })
+            PleosButton(stringResource(R.string.methods_skip), { send(Event.SkipMethod) })
+            PleosButton(stringResource(R.string.methods_pick), { send(Event.Next) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        val cards = methods.cards
+        val card: @Composable (Recommended, Modifier) -> Unit = { rec, modifier ->
+            MethodCard(rec, role, methods.chosen == rec.method, { send(Event.ChooseMethod(rec.method)) }, modifier)
+        }
+        BoxWithConstraints {
+            if (maxWidth >= 1000.dp) {
+                Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    cards.forEach { card(it, Modifier.weight(1f).fillMaxHeight()) }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                    cards.forEach { card(it, Modifier.fillMaxWidth()) }
+                }
+            }
+        }
+        methods.problems.messageFor(Problem.NoMethod)?.let { ErrorText(it) }
+    }
+}
+
+@Composable
+private fun MethodCard(rec: Recommended, role: Role, selected: Boolean, onSelect: () -> Unit, modifier: Modifier) {
+    SelectableCard(selected, onSelect, modifier) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(rec.method.approach.label, style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
+            if (selected) Text(stringResource(R.string.label_selected), style = PleosType.LabelMedium, color = PleosColor.FilledEnabled)
+        }
+        Text(rec.method.title, style = PleosType.TitleSmall)
+        Text(rec.method.why, style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        if (rec.reasons.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rec.reasons.forEach { reason ->
+                    Text(
+                        reason,
+                        style = PleosType.LabelSmall,
+                        color = PleosColor.TextSecondary,
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(PleosColor.BasicEnabled)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
+        MethodGuide(rec.method, role)
+    }
+}
+
+/** Shared by W10 and W05 so the F16 line always shows with the card. */
+@Composable
+private fun MethodGuide(method: Method, role: Role) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.method_start_label), style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
+        Text(method.start, style = PleosType.BodySmall)
+        Text(stringResource(R.string.method_example, method.firstWords(role)), style = PleosType.BodySmall, color = PleosColor.FilledEnabled)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.method_respond_label), style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
+        method.respond.forEach { Text(it, style = PleosType.BodySmall) }
+    }
+}
+
+@Composable
+private fun ReadyScreen(ready: Session.Ready, close: () -> Unit) {
+    ScreenFrame(
+        title = stringResource(R.string.ready_title),
+        actions = { PleosButton(stringResource(R.string.ready_close), close, style = ButtonStyle.Primary) },
+    ) {
+        ready.method?.let { method ->
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(method.approach.label, style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
+                Text(method.title, style = PleosType.TitleSmall)
+                MethodGuide(method, ready.role)
+                Text(STOP, style = PleosType.BodyMedium)
+            }
+        }
+        Text(
+            stringResource(if (ready.guide == Guide.OnceGeneric) R.string.ready_guide_once else R.string.ready_guide_off),
+            style = PleosType.BodyMedium,
+            color = PleosColor.TextSecondary,
+        )
     }
 }
 
@@ -372,8 +503,8 @@ private fun GuideScreen(guide: Guide, send: (Event) -> Unit) {
 }
 
 @Composable
-private fun NoticeScreen(title: String, body: String, actions: (@Composable () -> Unit)? = null) {
-    ScreenFrame(title = title, actions = actions) {
+private fun NoticeScreen(title: String, body: String) {
+    ScreenFrame(title = title) {
         Text(body, style = PleosType.BodyMedium, color = PleosColor.TextSecondary)
     }
 }
