@@ -24,6 +24,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Gleo AI calls the schema.json functions with explicit broadcasts. -->
+        <receiver
+            android:name=".gleo.GleoReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="RECOMMEND_OPENER" />
+                <action android:name="RECOMMEND_SAVED_TOPIC" />
+                <action android:name="SAVE_TOPIC" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
