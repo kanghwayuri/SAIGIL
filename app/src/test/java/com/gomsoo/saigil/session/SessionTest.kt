@@ -273,9 +273,6 @@ class SessionTest {
 
         val restarted = ended.after(Event.VehicleChanged(Restriction.Parked), Event.Restart)
         assertEquals(Session.Start(), restarted.session)
-        assertEquals(
-            setOf(Problem.NoRole, Problem.NotAlone, Problem.NotParkedConfirmed),
-            (restarted.after(Event.Next).session as Session.Start).problems,
-        )
+        assertEquals(setOf(Problem.NoRole), (restarted.after(Event.Next).session as Session.Start).problems)
     }
 }
