@@ -10,6 +10,8 @@ activityCompose = "1.12.2"
 lifecycle = "2.10.0"
 pleosVehicle = "2.3.2"
 kotlinxSerialization = "1.9.0"
+pleosSpeech = "3.3.1"
+pleosNaviHelper = "3.0.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -25,6 +27,9 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+pleos-stt = { group = "ai.pleos.playground", name = "SpeechToText", version.ref = "pleosSpeech" }
+pleos-tts = { group = "ai.pleos.playground", name = "TextToSpeech", version.ref = "pleosSpeech" }
+pleos-navihelper = { group = "ai.pleos.playground", name = "NaviHelper", version.ref = "pleosNaviHelper" }
 pleos-vehicle = { group = "ai.pleos.playground", name = "Vehicle", version.ref = "pleosVehicle" }
 
 [plugins]
