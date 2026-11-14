@@ -1,11 +1,11 @@
 ---
 name: verify-saigil
-description: Drive the SAIGIL Android app (com.gomsoo.saigil) on the Pleos Connect car emulator the way a user does and capture proof. Use to prove a change to the app works on the real screen, such as the driver door position readout, before calling it done.
+description: Drive the SAIGIL Android app (com.gomsoo.saigil) on the Pleos Connect car emulator the way a user does and capture proof. Use to prove a change to the app works on the real screen, such as saving a profile or getting a recommendation, before calling it done.
 ---
 
 # Verify SAIGIL
 
-SAIGIL is a single-screen Android app for the Pleos Connect car platform. It reads the driver door position through the Pleos Vehicle SDK and shows it as text. This skill builds the app, runs it on the car emulator, changes the vehicle state the way the emulator's own Virtual Console does, and saves proof.
+SAIGIL is a conversation companion app for the Pleos Connect car platform. It saves driver and passenger profiles and topics, recommends how to open a conversation, speaks suggestions while driving, and answers Gleo AI. This skill builds the app, runs it on the car emulator, changes the vehicle state the way the emulator's own Virtual Console does, and saves proof.
 
 Everything goes through one helper, run from the repo root:
 
@@ -29,7 +29,7 @@ The feature recipes are in [`features/`](features/README.md). Read that index be
 
 It opens a run, records the driver door state so cleanup can restore it, runs the repo's own `just install <serial>` (build the debug APK, install it, start the app from its launcher entry), and waits until the screen is usable.
 
-Ready means the screen left `Loading door position...` and shows `ROW_1_LEFT door position: <n>` or `Failed: <message>`. `launch` prints that line. It fails after 30 seconds if the screen still shows the loading text, and that failure is a finding about the app, not about the harness.
+Ready means SAIGIL is in the foreground and shows its screen title, `사이길` on a fresh start. `launch` prints that line. It fails after 30 seconds if SAIGIL shows no text, and that failure is a finding about the app, not about the harness.
 
 Requirements: `adb`, `just`, `curl`, and `python3` on `PATH`, and the Pleos car emulator already booted. The helper finds the emulator by itself. When more than one is connected, set `SAIGIL_SERIAL=<serial>`.
 
@@ -43,7 +43,7 @@ Read-only. Run it first whenever anything looks off. It reports `OK`, `WARN`, or
 
 - the Pleos car emulator and its AVD name
 - whether the installed APK is byte-identical to `app/build/outputs/apk/debug/app-debug.apk`, so you are not driving a stale build
-- whether `pleos.car.permission.CAR_DOORS` is granted
+- whether `pleos.car.permission.STT_SERVICE` is granted
 - whether `MainActivity` is in the foreground, and the text it shows
 - whether the Virtual Console answers, the driver door state, and whether another console client is active
 - whether a run is open, and where its evidence goes
@@ -61,7 +61,7 @@ Read-only. Run it first whenever anything looks off. It reports `OK`, `WARN`, or
 Stable handles on the screen, all plain text because the screen has no resource IDs:
 
 - the app bar title `SAIGIL`
-- the result line, one of `Loading door position...`, `ROW_1_LEFT door position: <n>`, or `Failed: <message>`
+- the screen title, the first line `control-saigil text` prints
 
 The app reads the door once, when the activity is created. After a `door` command the screen keeps its old value until `relaunch`.
 
@@ -78,7 +78,7 @@ It writes five files to `verify-artifacts/<run-id>/`, each named `<label>.<kind>
 - `png`: a screenshot of the whole car display. It shows the app and the platform's own 3D car, which draws the open door.
 - `ui.xml`: the UI hierarchy
 - `text.txt`: the SAIGIL text on screen
-- `logcat.txt`: every `SAIGIL` log line since `launch`
+- `logcat.txt`: every `SAIGIL`, `SaigilDrive` (spoken suggestions) and `SaigilGleo` (Gleo requests and responses) log line since `launch`
 - `vehicle.json`: the Virtual Console's door and door-lock state at that moment
 
 `verify-artifacts/` ignores itself in git. `launch` also saves `install.log` there.

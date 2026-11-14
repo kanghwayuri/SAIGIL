@@ -5,7 +5,7 @@ set -euo pipefail
 
 PKG=com.gomsoo.saigil
 ACTIVITY=$PKG/.MainActivity
-PERMISSION=pleos.car.permission.CAR_DOORS
+PERMISSION=pleos.car.permission.STT_SERVICE
 # The Virtual Console ships only on the Pleos car image, so its package marks the right device.
 CONSOLE_PKG=ai.pleos.connectwebconsole
 CONSOLE_PORT=8088
@@ -102,19 +102,17 @@ for node in re.findall(r"<node [^>]*>", sys.stdin.read()):
         print(html.unescape(text.group(1)))' "$PKG"
 }
 
-result_line() { screen_text | grep -E '^(ROW_1_LEFT door position: |Failed: |Loading door position)' || true; }
+result_line() { screen_text | head -1; }
 
-# Ready means the screen left "Loading door position..." for a result or a failure line.
+# Ready means SAIGIL is in the foreground and shows its first line of text, the screen title.
 wait_ready() {
     local deadline=$((SECONDS + READY_TIMEOUT)) line
     while [ "$SECONDS" -lt "$deadline" ]; do
         line=$(result_line)
-        case $line in
-        "ROW_1_LEFT door position: "* | "Failed: "*) echo "$line"; return 0 ;;
-        esac
+        if [ -n "$line" ]; then echo "$line"; return 0; fi
         sleep 1
     done
-    die "not ready after ${READY_TIMEOUT}s; screen shows: '$(result_line)'"
+    die "not ready after ${READY_TIMEOUT}s; SAIGIL shows no text"
 }
 
 start_app() {
@@ -237,7 +235,7 @@ cmd_evidence() {
     adb -s "$SERIAL" exec-out screencap -p >"$dir/$label.png"
     adb -s "$SERIAL" exec-out uiautomator dump /dev/tty 2>/dev/null >"$dir/$label.ui.xml"
     screen_text >"$dir/$label.text.txt"
-    adb -s "$SERIAL" logcat -d -T "$(cat "$dir/logcat.since")" -s SAIGIL:V >"$dir/$label.logcat.txt" 2>&1
+    adb -s "$SERIAL" logcat -d -T "$(cat "$dir/logcat.since")" -s SAIGIL:V SaigilDrive:V SaigilGleo:V >"$dir/$label.logcat.txt" 2>&1
     console_open
     console_state | python3 -I -c '
 import json, sys
