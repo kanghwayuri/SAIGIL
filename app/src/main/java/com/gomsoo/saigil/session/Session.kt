@@ -36,6 +36,9 @@ enum class Problem {
 
 /** Each variant is one screen. Only the preparation screens can hold personal text. */
 sealed interface Session {
+    /** Becomes [Protected] on Abort, PageHidden, or any vehicle state other than parked (F02, F05). */
+    sealed interface Preparing : Session
+
     /** W01 */
     data class Start(
         val role: Role? = null,
@@ -44,14 +47,14 @@ sealed interface Session {
         val alone: Boolean = false,
         val parked: Boolean = false,
         val problems: Set<Problem> = emptySet(),
-    ) : Session
+    ) : Preparing
 
     /** W02 for a [Material.Story], W02B for a [Material.Interest]. */
     data class Compose(
         val role: Role,
         val material: Material,
         val problems: Set<Problem> = emptySet(),
-    ) : Session
+    ) : Preparing
 
     /** W03 */
     data class Edit(
@@ -60,10 +63,10 @@ sealed interface Session {
         val result: String,
         val showSource: Boolean = false,
         val problems: Set<Problem> = emptySet(),
-    ) : Session
+    ) : Preparing
 
     /** W04 */
-    data class GuideChoice(val guide: Guide = Guide.Off) : Session
+    data class GuideChoice(val guide: Guide = Guide.Off) : Preparing
 
     /** W05 */
     data class Ready(val guide: Guide) : Session
@@ -142,15 +145,12 @@ private fun Material.clamped(): Material = when (this) {
     )
 }
 
-private val Session.isPreparing: Boolean
-    get() = this is Session.Start || this is Session.Compose || this is Session.Edit || this is Session.GuideChoice
-
 fun reduce(model: Model, event: Event): Model {
     if (event is Event.VehicleChanged) {
         return Model(onVehicle(model.session, event.restriction), event.restriction)
     }
     val session = model.session
-    if ((event == Event.Abort || event == Event.PageHidden) && session.isPreparing) {
+    if ((event == Event.Abort || event == Event.PageHidden) && session is Session.Preparing) {
         return model.copy(session = Session.Protected)
     }
     val next = when (session) {
@@ -177,7 +177,7 @@ private fun onVehicle(session: Session, restriction: Restriction): Session = whe
             if (session.problems.isEmpty()) session else session.copy(problems = problems(session, restriction))
         else -> session
     }
-    session.isPreparing -> Session.Protected
+    session is Session.Preparing -> Session.Protected
     session is Session.Ready -> when {
         restriction == Restriction.Restricted && session.guide == Guide.OnceGeneric -> Session.GuideWaiting
         else -> Session.Ended
