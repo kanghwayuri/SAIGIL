@@ -5,12 +5,13 @@ import android.car.drivingstate.CarUxRestrictions
 import android.car.drivingstate.CarUxRestrictionsManager
 import android.content.Context
 import android.content.pm.PackageManager
-import com.gomsoo.saigil.session.Restriction
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+
+enum class Restriction { Parked, Restricted, Unknown }
 
 /** Emits once the car service answers. Collect to connect, cancel to release. */
 fun vehicleRestrictions(context: Context): Flow<Restriction> {

@@ -1,34 +1,29 @@
 package com.gomsoo.saigil
 
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.gomsoo.saigil.session.Event
-import com.gomsoo.saigil.ui.SaigilApp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.gomsoo.saigil.ui.theme.PleosColor
+import com.gomsoo.saigil.ui.theme.PleosType
 import com.gomsoo.saigil.ui.theme.SaigilTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: SessionViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // The Recents thumbnail would otherwise keep a picture of the draft after the draft is cleared.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
         setContent {
             SaigilTheme {
-                val model by viewModel.model.collectAsStateWithLifecycle()
-                SaigilApp(model = model, send = viewModel::send, close = ::finish)
+                Box(Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.app_name), style = PleosType.TitleLarge)
+                }
             }
         }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        if (!isChangingConfigurations) viewModel.send(Event.PageHidden)
     }
 }
