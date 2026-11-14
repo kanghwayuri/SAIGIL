@@ -40,7 +40,7 @@ fun answer(function: Function, params: Map<String, String>, library: Library, ri
             val cards = openers(topic, riders, library)
             Answer(
                 Status.Success,
-                "Here are three ways to start talking about the topic. Read the first line of each in Korean.",
+                "Here are three ways to start talking about the topic.",
                 buildJsonArray {
                     cards.forEach { add(buildJsonObject { put("approach", it.approach.name); put("firstLine", it.first); put("followUp", it.followUp) }) }
                 },
