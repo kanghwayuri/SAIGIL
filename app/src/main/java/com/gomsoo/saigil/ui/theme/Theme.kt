@@ -56,16 +56,11 @@ private fun style(weight: FontWeight, size: Int, lineHeight: Int) = TextStyle(
     color = PleosColor.TextPrimary,
 )
 
+/** The only three text sizes in the app. The car display is 160 dpi, so 1sp is one pixel. */
 object PleosType {
-    val HeadlineSmall = style(FontWeight.ExtraBold, 40, 52)
-    val TitleLarge = style(FontWeight.ExtraBold, 34, 44)
-    val TitleMedium = style(FontWeight.ExtraBold, 30, 40)
-    val TitleSmall = style(FontWeight.Bold, 26, 34)
-    val BodyLarge = style(FontWeight.Bold, 24, 32)
-    val BodyMedium = style(FontWeight.Bold, 22, 30)
-    val BodySmall = style(FontWeight.Bold, 20, 28)
-    val LabelMedium = style(FontWeight.Normal, 20, 26)
-    val LabelSmall = style(FontWeight.Normal, 18, 24)
+    val Title = style(FontWeight.ExtraBold, 40, 52)
+    val Body = style(FontWeight.Bold, 30, 40)
+    val Caption = style(FontWeight.Normal, 26, 34)
 }
 
 @Composable
@@ -83,15 +78,16 @@ fun SaigilTheme(content: @Composable () -> Unit) {
             error = PleosColor.Error,
         ),
         typography = Typography(
-            headlineSmall = PleosType.HeadlineSmall,
-            titleLarge = PleosType.TitleLarge,
-            titleMedium = PleosType.TitleMedium,
-            titleSmall = PleosType.TitleSmall,
-            bodyLarge = PleosType.BodyLarge,
-            bodyMedium = PleosType.BodyMedium,
-            bodySmall = PleosType.BodySmall,
-            labelMedium = PleosType.LabelMedium,
-            labelSmall = PleosType.LabelSmall,
+            headlineSmall = PleosType.Title,
+            titleLarge = PleosType.Title,
+            titleMedium = PleosType.Body,
+            titleSmall = PleosType.Body,
+            bodyLarge = PleosType.Body,
+            bodyMedium = PleosType.Body,
+            bodySmall = PleosType.Caption,
+            labelLarge = PleosType.Caption,
+            labelMedium = PleosType.Caption,
+            labelSmall = PleosType.Caption,
         ),
         content = content,
     )

@@ -103,14 +103,24 @@ private fun ScreenFrame(
     actions: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding()) {
+    Column(
+        Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
             Column(
                 Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                Text(title, style = PleosType.TitleLarge, modifier = Modifier.semantics { heading() })
-                if (note != null) Text(note, style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                Text(
+                    title,
+                    style = PleosType.Title,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().semantics { heading() },
+                )
+                if (note != null) {
+                    Text(note, style = PleosType.Body, color = PleosColor.TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
                 content()
             }
         }
@@ -118,7 +128,7 @@ private fun ScreenFrame(
             HorizontalDivider(color = PleosColor.Divider)
             FlowRow(
                 Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) { actions() }
         }
@@ -145,7 +155,7 @@ private fun <T> Columns(items: List<T>, perRow: Int, item: @Composable ColumnSco
 private fun Chip(text: String) {
     Text(
         text,
-        style = PleosType.LabelMedium,
+        style = PleosType.Caption,
         color = PleosColor.TextPrimary,
         modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(PleosColor.BasicEnabled).padding(horizontal = 16.dp, vertical = 6.dp),
     )
@@ -215,7 +225,7 @@ private fun HomeScreen(ui: Ui, send: (Event) -> Unit) {
             ?: stringResource(R.string.home_body),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.home_me, ui.me?.let(ui.library::nameOf).orEmpty()), style = PleosType.TitleSmall)
+            Text(stringResource(R.string.home_me, ui.me?.let(ui.library::nameOf).orEmpty()), style = PleosType.Body)
             PleosButton(stringResource(R.string.home_change_me), { send(Event.ChangeMe) }, size = ButtonSize.Small)
         }
         val modes = listOf(
@@ -225,8 +235,8 @@ private fun HomeScreen(ui: Ui, send: (Event) -> Unit) {
         )
         Columns(modes, perRow = 3) { (title, body, event) ->
             SelectableCard(selected = false, onSelect = { send(event) }) {
-                Text(stringResource(title), style = PleosType.TitleSmall)
-                Text(stringResource(body), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+                Text(stringResource(title), style = PleosType.Body)
+                Text(stringResource(body), style = PleosType.Caption, color = PleosColor.TextSecondary)
             }
         }
     }
@@ -242,26 +252,26 @@ private fun PeopleScreen(library: Library, me: PersonId?, send: (Event) -> Unit)
             PleosButton(stringResource(R.string.people_save_topic), { send(Event.OpenSaveTopic) }, style = ButtonStyle.Primary)
         },
     ) {
-        if (library.people.isEmpty()) Text(stringResource(R.string.people_empty), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        if (library.people.isEmpty()) Text(stringResource(R.string.people_empty), style = PleosType.Body, color = PleosColor.TextSecondary)
         Columns(library.people, perRow = 2) { person ->
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(person.name, style = PleosType.TitleSmall)
+                    Text(person.name, style = PleosType.Body)
                     if (person.id == me) Chip(stringResource(R.string.people_me))
                 }
                 if (person.places.isNotEmpty()) {
-                    Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+                    Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
                 }
                 if (person.interests.isNotEmpty()) {
-                    Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+                    Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
                 }
                 me?.let { Pair.of(it, person.id) }?.let { pair ->
                     Text(
                         stringResource(R.string.people_topics, library.topicsOf(pair).size),
-                        style = PleosType.LabelMedium,
+                        style = PleosType.Caption,
                         color = PleosColor.TextTertiary,
                     )
                 }
@@ -341,14 +351,14 @@ private fun CaptureScreen(
             when (val stt = capture.stt) {
                 is Stt.Listening -> Text(
                     stringResource(R.string.mic_listening) + if (stt.partial.isNotEmpty()) " ${stt.partial}" else "",
-                    style = PleosType.BodyMedium,
+                    style = PleosType.Body,
                     modifier = Modifier.weight(1f),
                 )
                 is Stt.Failed -> ErrorText(
                     stringResource(if (stt.reason == SttFailure.NoSpeech) R.string.stt_no_speech else R.string.stt_unavailable),
                     Modifier.weight(1f),
                 )
-                Stt.Idle -> Text(stringResource(R.string.mic_hint), style = PleosType.LabelMedium, color = PleosColor.TextSecondary, modifier = Modifier.weight(1f))
+                Stt.Idle -> Text(stringResource(R.string.mic_hint), style = PleosType.Caption, color = PleosColor.TextSecondary, modifier = Modifier.weight(1f))
             }
         }
         LabeledField(
@@ -381,10 +391,10 @@ private fun PickCompanionScreen(screen: Screen.PickCompanion, library: Library, 
         },
     ) {
         if (others.isEmpty()) {
-            Text(stringResource(R.string.companion_need_other), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+            Text(stringResource(R.string.companion_need_other), style = PleosType.Body, color = PleosColor.TextSecondary)
             return@ScreenFrame
         }
-        Text(stringResource(R.string.companion_label), style = PleosType.TitleSmall)
+        Text(stringResource(R.string.companion_label), style = PleosType.Body)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             others.forEach { person ->
                 ChoiceOption(person.name, screen.companion == person.id, { send(Event.ChooseCompanion(person.id)) }, Modifier.widthIn(min = 200.dp))
@@ -396,12 +406,12 @@ private fun PickCompanionScreen(screen: Screen.PickCompanion, library: Library, 
         val name = library.nameOf(riders.companion)
         if (known != null && !screen.changingRelation) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.relation_known, name, known.label()), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                Text(stringResource(R.string.relation_known, name, known.label()), style = PleosType.Body, color = PleosColor.TextSecondary)
                 PleosButton(stringResource(R.string.relation_change), { send(Event.ChangeRelation) }, size = ButtonSize.Small)
             }
             return@ScreenFrame
         }
-        Text(stringResource(R.string.relation_question, name), style = PleosType.TitleSmall)
+        Text(stringResource(R.string.relation_question, name), style = PleosType.Body)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Relation.entries.forEach { relation ->
                 ChoiceOption(relation.label(), (screen.relation ?: known) == relation, { send(Event.PickRelation(relation)) }, Modifier.widthIn(min = 200.dp))
@@ -423,8 +433,8 @@ private fun ChooseInputScreen(send: (Event) -> Unit) {
         )
         Columns(kinds, perRow = 2) { (title, body, kind) ->
             SelectableCard(selected = false, onSelect = { send(Event.ChooseKind(kind)) }) {
-                Text(stringResource(title), style = PleosType.TitleSmall)
-                Text(stringResource(body), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+                Text(stringResource(title), style = PleosType.Body)
+                Text(stringResource(body), style = PleosType.Caption, color = PleosColor.TextSecondary)
             }
         }
     }
@@ -461,10 +471,10 @@ private fun OpenerCard(opener: Opener) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Chip(opener.approach.label())
-        Text(stringResource(R.string.openers_first), style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
-        Text("“${opener.first}”", style = PleosType.BodyLarge)
-        Text(stringResource(R.string.openers_follow), style = PleosType.LabelMedium, color = PleosColor.TextTertiary)
-        Text(opener.followUp, style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+        Text(stringResource(R.string.openers_first), style = PleosType.Caption, color = PleosColor.TextTertiary)
+        Text("“${opener.first}”", style = PleosType.Body)
+        Text(stringResource(R.string.openers_follow), style = PleosType.Caption, color = PleosColor.TextTertiary)
+        Text(opener.followUp, style = PleosType.Caption, color = PleosColor.TextSecondary)
     }
 }
 
@@ -484,14 +494,14 @@ private fun SavedTopicsScreen(screen: Screen.SavedTopics, send: (Event) -> Unit)
             PleosButton(stringResource(R.string.action_done), { send(Event.Done) }, style = ButtonStyle.Primary)
         },
     ) {
-        if (screen.picks.isEmpty()) Text(stringResource(R.string.saved_empty), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        if (screen.picks.isEmpty()) Text(stringResource(R.string.saved_empty), style = PleosType.Body, color = PleosColor.TextSecondary)
         Columns(screen.picks, perRow = 3) { pick ->
             SelectableCard(selected = false, onSelect = { send(Event.ChooseTopic(pick.topic.id)) }) {
-                Text(pick.topic.text, style = PleosType.BodyLarge)
+                Text(pick.topic.text, style = PleosType.Body)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     pick.reasons.forEach { Chip(it.label()) }
                 }
-                Text(stringResource(R.string.saved_open), style = PleosType.LabelMedium, color = PleosColor.FilledEnabled)
+                Text(stringResource(R.string.saved_open), style = PleosType.Caption, color = PleosColor.FilledEnabled)
             }
         }
     }
@@ -509,7 +519,7 @@ private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event
             PleosButton(stringResource(R.string.reflect_submit), { send(Event.Submit) }, style = ButtonStyle.Primary)
         },
     ) {
-        Text(stringResource(R.string.reflect_flow), style = PleosType.TitleSmall)
+        Text(stringResource(R.string.reflect_flow), style = PleosType.Body)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             listOf(Flow.Smooth to R.string.flow_smooth, Flow.Okay to R.string.flow_okay, Flow.Awkward to R.string.flow_awkward).forEach { (flow, label) ->
                 ChoiceOption(stringResource(label), screen.flow == flow, { send(Event.PickFlow(flow)) }, Modifier.widthIn(min = 260.dp))
@@ -526,7 +536,7 @@ private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event
             minLines = 1,
         )
         if (known.isNotEmpty()) {
-            Text(stringResource(R.string.reflect_known, known.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
+            Text(stringResource(R.string.reflect_known, known.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
         }
     }
 }
@@ -539,12 +549,12 @@ private fun DrivingScreen(ui: Ui) {
         verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(stringResource(R.string.driving_title), style = PleosType.HeadlineSmall, modifier = Modifier.semantics { heading() })
-        Text(stringResource(R.string.driving_body), style = PleosType.BodyMedium, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.driving_title), style = PleosType.Title, modifier = Modifier.semantics { heading() })
+        Text(stringResource(R.string.driving_body), style = PleosType.Body, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
         Text(
             if (ride != null) stringResource(R.string.driving_voice_on, ui.library.nameOf(ride.riders.companion))
             else stringResource(R.string.driving_voice_off),
-            style = PleosType.BodySmall,
+            style = PleosType.Body,
             textAlign = TextAlign.Center,
         )
     }
