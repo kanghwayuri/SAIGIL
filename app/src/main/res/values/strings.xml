@@ -114,6 +114,18 @@
     <string name="driving_body">화면 조작은 안전하게 주차한 뒤에 할 수 있어요.</string>
     <string name="driving_voice_on">%1$s 님과 함께하는 동안, 길게 달리거나 길이 막히면 음성으로 화제를 추천해 드려요.</string>
     <string name="driving_voice_off">추천 모드에서 동승자를 고르면 음성 추천이 켜져요.</string>
+    <string name="driving_idle_on">음성 추천이 켜져 있어요</string>
+    <string name="driving_idle_off">아직 동승자를 고르지 않았어요</string>
+    <string name="driving_highway">고속도로 주행 중</string>
+    <string name="driving_remaining">남은 거리 %1$dkm</string>
+    <string name="driving_jam">정체 구간</string>
+    <string name="driving_length_km">%1$.1fkm</string>
+    <string name="driving_length_m">%1$dm</string>
+    <string name="driving_avg_speed">평균 %1$dkm/h</string>
+    <string name="driving_saved_topic">저장해 둔 화제</string>
+    <string name="driving_trend">요즘 이야깃거리</string>
+    <string name="driving_balance">밸런스 게임</string>
+    <string name="driving_versus">vs</string>
 
     <string name="problem_no_name">이름을 적어 주세요.</string>
     <string name="problem_no_companion">동승자를 골라 주세요.</string>

@@ -19,6 +19,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true">
+            <!-- Draws only the touch-free driving board while the car moves, so the system lets it stay on screen. -->
+            <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

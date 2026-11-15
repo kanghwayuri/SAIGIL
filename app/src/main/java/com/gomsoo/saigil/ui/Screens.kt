@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
@@ -27,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gomsoo.saigil.R
 import com.gomsoo.saigil.Ui
@@ -39,6 +43,8 @@ import com.gomsoo.saigil.library.Riders
 import com.gomsoo.saigil.recommend.Approach
 import com.gomsoo.saigil.recommend.Opener
 import com.gomsoo.saigil.recommend.Reason
+import com.gomsoo.saigil.recommend.Situation
+import com.gomsoo.saigil.recommend.Suggestion
 import com.gomsoo.saigil.screen.Capture
 import com.gomsoo.saigil.screen.Event
 import com.gomsoo.saigil.screen.InputKind
@@ -541,21 +547,94 @@ private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event
     }
 }
 
+/** No touch targets and no motion: the driver should take it in at a glance. */
 @Composable
 private fun DrivingScreen(ui: Ui) {
     val ride = ui.ride
     Column(
-        Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding().padding(40.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        Modifier.fillMaxSize().background(PleosColor.BackgroundPrimary).safeDrawingPadding().padding(horizontal = 48.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(stringResource(R.string.driving_title), style = PleosType.Title, modifier = Modifier.semantics { heading() })
-        Text(stringResource(R.string.driving_body), style = PleosType.Body, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
         Text(
-            if (ride != null) stringResource(R.string.driving_voice_on, ui.library.nameOf(ride.riders.companion))
-            else stringResource(R.string.driving_voice_off),
+            ui.board.situation?.label() ?: stringResource(R.string.driving_title),
             style = PleosType.Body,
             textAlign = TextAlign.Center,
+            modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(PleosColor.BasicEnabled).padding(horizontal = 32.dp, vertical = 12.dp),
         )
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val latest = ui.board.latest
+            when {
+                ride == null -> DrivingIdle(stringResource(R.string.driving_idle_off), stringResource(R.string.driving_voice_off))
+                latest == null -> DrivingIdle(
+                    stringResource(R.string.driving_idle_on),
+                    stringResource(R.string.driving_voice_on, ui.library.nameOf(ride.riders.companion)),
+                )
+                latest is Suggestion.BalanceGame -> BalanceBoard(latest)
+                latest is Suggestion.SavedTopic -> SuggestionBoard(stringResource(R.string.driving_saved_topic), latest.text)
+                latest is Suggestion.Trend -> SuggestionBoard(stringResource(R.string.driving_trend), latest.text)
+            }
+        }
+        Text(stringResource(R.string.driving_body), style = PleosType.Caption, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun Situation.label(): String {
+    val parts = when (this) {
+        is Situation.Highway -> listOfNotNull(
+            stringResource(R.string.driving_highway),
+            remainingKm?.let { stringResource(R.string.driving_remaining, it) },
+        )
+        is Situation.Jam -> listOfNotNull(
+            stringResource(R.string.driving_jam),
+            lengthM?.let {
+                if (it >= 1000) stringResource(R.string.driving_length_km, it / 1000.0) else stringResource(R.string.driving_length_m, it)
+            },
+            avgSpeedKmh?.let { stringResource(R.string.driving_avg_speed, it) },
+        )
+    }
+    return parts.joinToString(" · ")
+}
+
+@Composable
+private fun DrivingIdle(title: String, body: String) {
+    Column(Modifier.widthIn(max = 1400.dp), verticalArrangement = Arrangement.spacedBy(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(title, style = PleosType.Title, textAlign = TextAlign.Center)
+        Text(body, style = PleosType.Body, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun SuggestionBoard(label: String, text: String) {
+    Column(Modifier.widthIn(max = 1600.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = PleosType.Body, color = PleosColor.FilledEnabled)
+        Box(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(horizontal = 56.dp, vertical = 48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text, style = PleosType.Title, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun BalanceBoard(game: Suggestion.BalanceGame) {
+    Column(Modifier.widthIn(max = 1600.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(stringResource(R.string.driving_balance), style = PleosType.Body, color = PleosColor.FilledEnabled)
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+            BalanceHalf(game.a, Modifier.weight(1f))
+            Text(stringResource(R.string.driving_versus), style = PleosType.Title, color = PleosColor.TextSecondary)
+            BalanceHalf(game.b, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun BalanceHalf(text: String, modifier: Modifier) {
+    Box(
+        modifier.fillMaxHeight().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(horizontal = 40.dp, vertical = 56.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = PleosType.Title, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
