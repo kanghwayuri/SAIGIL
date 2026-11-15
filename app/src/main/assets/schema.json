@@ -1,6 +1,6 @@
 {
   "packageName": "com.gomsoo.saigil",
-  "appDescription": "SAIGIL helps a driver and a passenger talk on the road by suggesting how to open a topic and which saved topic fits the moment.",
+  "appDescription": "SAIGIL helps the user and the person riding with them talk on the road by suggesting how to open a topic and which saved topic fits the moment.",
   "version": "1.0",
   "actionCalls": [
     {
@@ -61,7 +61,7 @@
             },
             "companion": {
               "type": "string",
-              "description": "The saved profile name of the person the topic is about."
+              "description": "The saved profile name of the person the user wants to talk about this topic with."
             }
           },
           "required": ["topic"]

@@ -31,7 +31,7 @@ class GleoReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.Default).launch {
             try {
                 val answer = withTimeoutOrNull(6_000) {
-                    val result = answer(function, params(raw), app.store.library.value, app.rides.active.value, Stamp(System.currentTimeMillis(), UUID.randomUUID().toString()))
+                    val result = answer(function, params(raw), app.store.library.value, app.me.value, app.rides.active.value, Stamp(System.currentTimeMillis(), UUID.randomUUID().toString()))
                     result.write?.let { write -> app.store.update(write::applyTo) }
                     result
                 } ?: Answer(Status.Fail, "SAIGIL could not answer in time.")
