@@ -97,6 +97,17 @@ class ScreenTest {
     }
 
     @Test
+    fun `the final text fills the field even when the recognizer reports its end first`() {
+        startAs(mom, dad, mom)
+        send(Event.OpenPeople, Event.OpenSaveTopic, Event.ChooseCompanion(dad.id), Event.PickRelation(Relation.Partner), Event.Submit, Event.Mic)
+        send(Event.Speech(Heard.Partial("바다 여행")), Event.Speech(Heard.Ended))
+        assertEquals(Capture(Stt.Idle, "바다 여행"), screen<Screen.TopicCapture>().capture)
+
+        send(Event.Speech(Heard.Final("바다 여행 가는 얘기")))
+        assertEquals(Capture(Stt.Idle, "바다 여행 가는 얘기"), screen<Screen.TopicCapture>().capture)
+    }
+
+    @Test
     fun `a pair that already has a relation is not asked again, but can change it`() {
         startAs(mom, dad, mom)
         library = library.relate(Riders.of(dad.id, mom.id)!!, Relation.Child)
