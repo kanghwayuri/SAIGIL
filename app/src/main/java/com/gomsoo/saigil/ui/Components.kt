@@ -29,6 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -160,35 +163,43 @@ fun LabeledField(
     minLines: Int = 2,
 ) {
     val marker = stringResource(if (required) R.string.label_required else R.string.label_optional)
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        textStyle = PleosType.Body,
-        label = { Text("$label ($marker)", style = PleosType.Caption) },
-        supportingText = {
-            Row(Modifier.fillMaxWidth()) {
-                if (error != null) ErrorText(error, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    stringResource(R.string.action_char_count, value.length, limit),
-                    style = PleosType.Caption,
-                    color = PleosColor.TextTertiary,
-                )
-            }
-        },
-        isError = error != null,
-        minLines = minLines,
-        shape = RoundedCornerShape(16.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = PleosColor.Field,
-            unfocusedContainerColor = PleosColor.Field,
-            errorContainerColor = PleosColor.Field,
-            focusedBorderColor = PleosColor.Field,
-            unfocusedBorderColor = PleosColor.Field,
-            focusedLabelColor = PleosColor.TextSecondary,
-            unfocusedLabelColor = PleosColor.TextTertiary,
-            cursorColor = PleosColor.TextPrimary,
-        ),
-    )
+    val title = "$label ($marker)"
+    val focus = remember { FocusRequester() }
+    // A fixed label above the field: Material's floating label sits on the outline, which is hidden here.
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            title,
+            style = PleosType.Caption,
+            color = PleosColor.TextSecondary,
+            modifier = Modifier.clickable(remember { MutableInteractionSource() }, indication = null) { focus.requestFocus() },
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = title },
+            textStyle = PleosType.Body,
+            supportingText = {
+                Row(Modifier.fillMaxWidth()) {
+                    if (error != null) ErrorText(error, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        stringResource(R.string.action_char_count, value.length, limit),
+                        style = PleosType.Caption,
+                        color = PleosColor.TextTertiary,
+                    )
+                }
+            },
+            isError = error != null,
+            minLines = minLines,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = PleosColor.Field,
+                unfocusedContainerColor = PleosColor.Field,
+                errorContainerColor = PleosColor.Field,
+                focusedBorderColor = PleosColor.Field,
+                unfocusedBorderColor = PleosColor.Field,
+                cursorColor = PleosColor.TextPrimary,
+            ),
+        )
+    }
 }
