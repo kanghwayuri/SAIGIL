@@ -5,7 +5,7 @@ description: Drive the SAIGIL Android app (com.gomsoo.saigil) on the Pleos Conne
 
 # Verify SAIGIL
 
-SAIGIL is a conversation companion app for the Pleos Connect car platform. It saves driver and passenger profiles and topics, recommends how to open a conversation, speaks suggestions while driving, and answers Gleo AI. This skill builds the app, runs it on the car emulator, changes the vehicle state the way the emulator's own Virtual Console does, and saves proof.
+SAIGIL is a conversation companion app for the Pleos Connect car platform. It asks which profile is the user on every entry, saves profiles and topics per pair of people, recommends how to open a conversation, speaks suggestions while driving, and answers Gleo AI. This skill builds the app, runs it on the car emulator, changes the vehicle state the way the emulator's own Virtual Console does, and saves proof.
 
 Everything goes through one helper, run from the repo root:
 
@@ -29,7 +29,7 @@ The feature recipes are in [`features/`](features/README.md). Read that index be
 
 It opens a run, records the driver door state so cleanup can restore it, runs the repo's own `just install <serial>` (build the debug APK, install it, start the app from its launcher entry), and waits until the screen is usable.
 
-Ready means SAIGIL is in the foreground and shows its screen title, `사이길` on a fresh start. `launch` prints that line. It fails after 30 seconds if SAIGIL shows no text, and that failure is a finding about the app, not about the harness.
+Ready means SAIGIL is in the foreground and shows its screen title, `나는 누구인가요?` on a fresh start. `launch` prints that line. It fails after 30 seconds if SAIGIL shows no text, and that failure is a finding about the app, not about the harness.
 
 Requirements: `adb`, `just`, `curl`, and `python3` on `PATH`, and the Pleos car emulator already booted. The helper finds the emulator by itself. When more than one is connected, set `SAIGIL_SERIAL=<serial>`.
 

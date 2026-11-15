@@ -10,31 +10,51 @@ v2 시나리오(프로필·화제 저장, 대화 추천, 능동 음성 추천, G
 classDiagram
     class Library {
         +List~Person~ people
+        +List~Tie~ ties
         +List~Topic~ topics
         +List~Ride~ rides
         +upsert(Person) Library
+        +relation(Riders) Relation?
+        +relate(Riders, Relation) Library
+        +register(Riders) Register
         +add(Topic) Library
+        +topicsOf(Pair) List~Topic~
         +markUsed(TopicId, Long) Library
         +record(Ride) Library
-        +bond(Riders) Bond
+        +bond(Pair) Bond
     }
     class Person {
         +PersonId id
         +String name
-        +Relation relation
         +List~String~ places
         +List~String~ interests
+    }
+    class Pair {
+        +PersonId first
+        +PersonId second
+        +of(a, b)$ Pair?
+    }
+    class Riders {
+        +PersonId me
+        +PersonId companion
+        +Pair pair
+        +of(me, companion)$ Riders?
+    }
+    class Tie {
+        +PersonId from
+        +PersonId to
+        +Relation relation
     }
     class Topic {
         +TopicId id
         +String text
-        +Set~PersonId~ about
+        +Pair pair
         +Long addedAt
         +Long? usedAt
     }
     class Ride {
-        +PersonId driver
-        +PersonId passenger
+        +PersonId me
+        +PersonId companion
         +Long at
         +Flow flow
         +List~String~ discovered
@@ -49,13 +69,18 @@ classDiagram
         +update(change) Library
     }
     Library *-- Person
+    Library *-- Tie
     Library *-- Topic
     Library *-- Ride
+    Topic --> Pair
+    Riders --> Pair
     Library ..> Bond : derives from rides
     LibraryStore --> Library : filesDir/library.json
 ```
 
-- `Relation.register`는 동승자가 `Parent`면 `Formal`(존댓말), 그 외에는 `Casual`(반말)입니다.
+- `Pair`는 정렬된 두 사람이라 (a,b)와 (b,a)가 같고, 같은 사람으로는 만들 수 없습니다(`of`가 null, 파일에서 읽을 때도 거부). `Riders`는 같은 쌍에 방향(me, companion)을 더한 것이고 저장하지 않습니다.
+- `relate`는 `Tie` 두 개를 함께 바꿉니다. `Parent`의 반대는 `Child`이고 나머지는 대칭입니다.
+- `register`는 me→companion이 `Parent`면 `Formal`(존댓말), 그 외나 관계가 없으면 `Casual`(반말)입니다.
 - 관계 데이터(`Bond`)는 저장하지 않고 `Ride` 목록에서 매번 계산합니다.
 - `LibraryStore.update`는 임시 파일에 쓴 뒤 rename하고, 쓰기가 끝난 다음에 `StateFlow` 값을 바꿉니다.
 
@@ -94,7 +119,7 @@ classDiagram
     Recommend --> Suggestion
 ```
 
-- `topicsFor`는 한글 글자 bigram 겹침(맥락 x3), 동승자 관심사·장소 겹침(+1), `about`에 동승자 포함(+2), 다른 사람 화제(-1), 3일 안에 쓴 화제(-2)로 점수를 냅니다.
+- `topicsFor`와 `proactive`는 `Riders.pair`의 화제만 봅니다. `topicsFor`는 한글 글자 bigram 겹침(맥락 x3), 동승자 관심사·장소 겹침(+1), 3일 안에 쓴 화제(-2)로 점수를 냅니다.
 - `proactive`는 저장 화제 → 요즘 이야깃거리 → 밸런스 게임 순서이고, `said`에 있는 key는 건너뜁니다.
 
 ## 3. 화면 (`screen/`, `ui/`)
@@ -111,7 +136,7 @@ classDiagram
     }
     class reduce {
         <<function>>
-        (Model, Event, Library, Stamp) Next
+        (Model, Event, Library, me, Stamp) Next
     }
     class Next {
         +Model model
@@ -119,14 +144,14 @@ classDiagram
     }
     class Screen {
         <<sealed>>
-        Home, People, PersonEdit, TopicCapture
-        PickPair, ChooseInput, Listen
+        WhoAmI, Home, People, PersonEdit
+        PickCompanion, TopicCapture, ChooseInput, Listen
         Openers, SavedTopics, Reflect
     }
     class Effect {
         <<sealed>>
-        Write: PutPerson, AddTopic, UseTopic, RecordRide
-        BeginRide, StartListening, StopListening
+        Write: PutPerson, AddTopic, UseTopic, RecordRide, Relate
+        BecomeMe, BeginRide, StartListening, StopListening
     }
     class SpeechInput {
         <<interface>>
@@ -144,7 +169,10 @@ classDiagram
     PleosSpeechInput ..|> SpeechInput
     SaigilViewModel --> LibraryStore : Effect.Write
     SaigilViewModel --> Rides : Effect.BeginRide
+    SaigilViewModel --> SaigilApplication : Effect.BecomeMe sets me
 ```
+
+- 화면 모델은 `WhoAmI`에서 시작합니다. reducer는 지금의 나(`me`)를 인자로 받고, 나를 바꿀 때는 `Effect.BecomeMe`를 돌려줍니다. ViewModel이 새로 만들어지면 `SaigilApplication.me`를 비웁니다.
 
 - reducer는 순수 함수입니다. 시각과 새 id는 `Stamp`로 받고, 저장·음성 인식·active ride는 `Effect`로 돌려줍니다.
 - `TopicCapture`와 `Listen`은 `Capture(stt, text)`를 가집니다. `stt`는 `Idle | Listening(partial) | Failed(reason)`이고, 전사 결과는 `text`에 들어가 사용자가 고칠 수 있습니다.
@@ -156,6 +184,7 @@ classDiagram
 classDiagram
     class SaigilApplication {
         +LibraryStore store
+        +MutableStateFlow~PersonId?~ me
         +Rides rides
         +RideCompanion companion
     }
@@ -201,7 +230,7 @@ classDiagram
     }
     class answer {
         <<function>>
-        (Function, params, Library, ActiveRide?, Stamp) Answer
+        (Function, params, Library, me, ActiveRide?, Stamp) Answer
     }
     class Answer {
         +Status status
@@ -221,4 +250,4 @@ classDiagram
     GleoReceiver ..> APP_ACTION_RESPONSE : broadcast within 6 s
 ```
 
-- 함수 선언은 `app/src/main/assets/schema.json`에 있습니다. `companion`이 없으면 active ride의 동승자를 쓰고, 둘 다 없으면 `asking`으로 누구와 타는지 되묻습니다.
+- 함수 선언은 `app/src/main/assets/schema.json`에 있습니다. 나는 `SaigilApplication.me`입니다. `companion`이 없으면 같은 나의 active ride 동승자를 쓰고, 나를 모르거나 동승자를 정할 수 없으면 `asking`으로 되묻습니다. `SAVE_TOPIC`은 Pair(me, companion)에 저장합니다.
