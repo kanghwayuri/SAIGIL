@@ -150,11 +150,6 @@ fun SelectableCard(
 }
 
 @Composable
-fun ConfirmationButton(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    ChoiceOption(text, checked, { onCheckedChange(!checked) }, modifier)
-}
-
-@Composable
 fun LabeledField(
     label: String,
     required: Boolean,

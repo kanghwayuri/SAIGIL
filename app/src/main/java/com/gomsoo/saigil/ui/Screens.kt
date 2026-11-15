@@ -32,8 +32,10 @@ import com.gomsoo.saigil.R
 import com.gomsoo.saigil.Ui
 import com.gomsoo.saigil.library.Flow
 import com.gomsoo.saigil.library.Library
+import com.gomsoo.saigil.library.Pair
 import com.gomsoo.saigil.library.PersonId
 import com.gomsoo.saigil.library.Relation
+import com.gomsoo.saigil.library.Riders
 import com.gomsoo.saigil.recommend.Approach
 import com.gomsoo.saigil.recommend.Opener
 import com.gomsoo.saigil.recommend.Reason
@@ -58,15 +60,18 @@ fun SaigilApp(ui: Ui, send: (Event) -> Unit) {
         return
     }
     val screen = ui.model.screen
-    BackHandler(enabled = screen != Screen.Home) { send(Event.Back) }
+    // Before the user is known there is nowhere to go back to, so the system leaves the app.
+    BackHandler(enabled = screen != Screen.Home && !(screen == Screen.WhoAmI && ui.me == null)) { send(Event.Back) }
     val library = ui.library
     when (screen) {
+        Screen.WhoAmI -> WhoAmIScreen(ui, send)
         Screen.Home -> HomeScreen(ui, send)
-        Screen.People -> PeopleScreen(library, send)
+        Screen.People -> PeopleScreen(library, ui.me, send)
         is Screen.PersonEdit -> PersonEditScreen(screen, send)
+        is Screen.PickCompanion -> PickCompanionScreen(screen, library, send)
         is Screen.TopicCapture -> CaptureScreen(
             title = stringResource(R.string.capture_title),
-            note = stringResource(R.string.capture_about, library.nameOf(screen.person)),
+            note = stringResource(R.string.capture_about, library.nameOf(screen.riders.companion)),
             field = stringResource(R.string.capture_field),
             capture = screen.capture,
             problems = screen.problems,
@@ -74,11 +79,10 @@ fun SaigilApp(ui: Ui, send: (Event) -> Unit) {
             submit = stringResource(R.string.action_save),
             send = send,
         )
-        is Screen.PickPair -> PickPairScreen(screen, library, send)
         is Screen.ChooseInput -> ChooseInputScreen(send)
         is Screen.Listen -> CaptureScreen(
             title = stringResource(if (screen.kind == InputKind.Topic) R.string.listen_topic_title else R.string.listen_context_title),
-            note = "${library.nameOf(screen.riders.driver)} · ${library.nameOf(screen.riders.passenger)}",
+            note = library.namesOf(screen.riders),
             field = stringResource(if (screen.kind == InputKind.Topic) R.string.listen_topic_field else R.string.listen_context_field),
             capture = screen.capture,
             problems = screen.problems,
@@ -151,10 +155,8 @@ private fun Chip(text: String) {
 private fun Problem.message(): String = stringResource(
     when (this) {
         Problem.NoName -> R.string.problem_no_name
+        Problem.NoCompanion -> R.string.problem_no_companion
         Problem.NoRelation -> R.string.problem_no_relation
-        Problem.NoDriver -> R.string.problem_no_driver
-        Problem.NoPassenger -> R.string.problem_no_passenger
-        Problem.SamePerson -> R.string.problem_same_person
         Problem.NoText -> R.string.problem_no_text
         Problem.NoFlow -> R.string.problem_no_flow
     },
@@ -168,10 +170,10 @@ private fun Problems(problems: Set<Problem>, vararg shown: Problem) {
 @Composable
 private fun Relation.label(): String = stringResource(
     when (this) {
-        Relation.Me -> R.string.relation_me
         Relation.Parent -> R.string.relation_parent
         Relation.Child -> R.string.relation_child
         Relation.Partner -> R.string.relation_partner
+        Relation.Sibling -> R.string.relation_sibling
         Relation.Friend -> R.string.relation_friend
         Relation.Other -> R.string.relation_other
     },
@@ -179,14 +181,43 @@ private fun Relation.label(): String = stringResource(
 
 private fun Library.nameOf(id: PersonId): String = person(id)?.name.orEmpty()
 
+private fun Library.namesOf(riders: Riders): String = "${nameOf(riders.me)} · ${nameOf(riders.companion)}"
+
+@Composable
+private fun WhoAmIScreen(ui: Ui, send: (Event) -> Unit) {
+    val people = ui.library.people
+    ScreenFrame(
+        title = stringResource(R.string.whoami_title),
+        note = stringResource(if (people.isEmpty()) R.string.whoami_empty else R.string.whoami_body),
+        actions = {
+            if (ui.me != null) PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
+            PleosButton(
+                stringResource(R.string.people_add),
+                { send(Event.AddPerson) },
+                style = if (people.isEmpty()) ButtonStyle.Primary else ButtonStyle.Secondary,
+            )
+        },
+    ) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            people.forEach { person ->
+                ChoiceOption(person.name, ui.me == person.id, { send(Event.ChooseMe(person.id)) }, Modifier.widthIn(min = 200.dp))
+            }
+        }
+    }
+}
+
 @Composable
 private fun HomeScreen(ui: Ui, send: (Event) -> Unit) {
     val ride = ui.ride
     ScreenFrame(
         title = stringResource(R.string.home_title),
-        note = ride?.let { stringResource(R.string.ride_active, ui.library.nameOf(it.riders.driver), ui.library.nameOf(it.riders.passenger)) }
+        note = ride?.let { stringResource(R.string.ride_active, ui.library.namesOf(it.riders)) }
             ?: stringResource(R.string.home_body),
     ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.home_me, ui.me?.let(ui.library::nameOf).orEmpty()), style = PleosType.TitleSmall)
+            PleosButton(stringResource(R.string.home_change_me), { send(Event.ChangeMe) }, size = ButtonSize.Small)
+        }
         val modes = listOf(
             Triple(R.string.home_input, R.string.home_input_body, Event.OpenPeople),
             Triple(R.string.home_recommend, R.string.home_recommend_body, Event.OpenRecommend),
@@ -202,12 +233,13 @@ private fun HomeScreen(ui: Ui, send: (Event) -> Unit) {
 }
 
 @Composable
-private fun PeopleScreen(library: Library, send: (Event) -> Unit) {
+private fun PeopleScreen(library: Library, me: PersonId?, send: (Event) -> Unit) {
     ScreenFrame(
         title = stringResource(R.string.people_title),
         actions = {
             PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
-            PleosButton(stringResource(R.string.people_add), { send(Event.AddPerson) }, style = ButtonStyle.Primary)
+            PleosButton(stringResource(R.string.people_add), { send(Event.AddPerson) })
+            PleosButton(stringResource(R.string.people_save_topic), { send(Event.OpenSaveTopic) }, style = ButtonStyle.Primary)
         },
     ) {
         if (library.people.isEmpty()) Text(stringResource(R.string.people_empty), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
@@ -218,7 +250,7 @@ private fun PeopleScreen(library: Library, send: (Event) -> Unit) {
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(person.name, style = PleosType.TitleSmall)
-                    Chip(person.relation.label())
+                    if (person.id == me) Chip(stringResource(R.string.people_me))
                 }
                 if (person.places.isNotEmpty()) {
                     Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
@@ -226,15 +258,14 @@ private fun PeopleScreen(library: Library, send: (Event) -> Unit) {
                 if (person.interests.isNotEmpty()) {
                     Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.LabelMedium, color = PleosColor.TextSecondary)
                 }
-                Text(
-                    stringResource(R.string.people_topics, library.topics.count { person.id in it.about }),
-                    style = PleosType.LabelMedium,
-                    color = PleosColor.TextTertiary,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PleosButton(stringResource(R.string.people_edit), { send(Event.EditPerson(person.id)) }, size = ButtonSize.Small)
-                    PleosButton(stringResource(R.string.people_add_topic), { send(Event.AddTopicFor(person.id)) }, size = ButtonSize.Small)
+                me?.let { Pair.of(it, person.id) }?.let { pair ->
+                    Text(
+                        stringResource(R.string.people_topics, library.topicsOf(pair).size),
+                        style = PleosType.LabelMedium,
+                        color = PleosColor.TextTertiary,
+                    )
                 }
+                PleosButton(stringResource(R.string.people_edit), { send(Event.EditPerson(person.id)) }, size = ButtonSize.Small)
             }
         }
     }
@@ -259,13 +290,6 @@ private fun PersonEditScreen(screen: Screen.PersonEdit, send: (Event) -> Unit) {
             error = if (Problem.NoName in screen.problems) Problem.NoName.message() else null,
             minLines = 1,
         )
-        Text(stringResource(R.string.person_relation), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Relation.entries.forEach { relation ->
-                ChoiceOption(relation.label(), draft.relation == relation, { send(Event.EditDraft(draft.copy(relation = relation))) }, Modifier.widthIn(min = 200.dp))
-            }
-        }
-        Problems(screen.problems, Problem.NoRelation)
         LabeledField(
             label = stringResource(R.string.person_places),
             required = false,
@@ -339,33 +363,51 @@ private fun CaptureScreen(
 }
 
 @Composable
-private fun PickPairScreen(screen: Screen.PickPair, library: Library, send: (Event) -> Unit) {
-    val enough = library.people.size >= 2
+private fun PickCompanionScreen(screen: Screen.PickCompanion, library: Library, send: (Event) -> Unit) {
+    val others = library.people.filter { it.id != screen.me }
     ScreenFrame(
-        title = stringResource(if (screen.purpose == Purpose.Recommend) R.string.pair_title_recommend else R.string.pair_title_reflect),
+        title = stringResource(
+            when (screen.purpose) {
+                Purpose.SaveTopic -> R.string.companion_title_topic
+                Purpose.Recommend -> R.string.companion_title_recommend
+                Purpose.Reflect -> R.string.companion_title_reflect
+            },
+        ),
+        note = stringResource(R.string.home_me, library.nameOf(screen.me)),
         actions = {
             PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
-            if (enough) PleosButton(stringResource(R.string.action_next), { send(Event.Submit) }, style = ButtonStyle.Primary)
-            else PleosButton(stringResource(R.string.pair_make_profiles), { send(Event.OpenPeople) }, style = ButtonStyle.Primary)
+            if (others.isNotEmpty()) PleosButton(stringResource(R.string.action_next), { send(Event.Submit) }, style = ButtonStyle.Primary)
+            else PleosButton(stringResource(R.string.companion_make_profile), { send(Event.OpenPeople) }, style = ButtonStyle.Primary)
         },
     ) {
-        if (!enough) {
-            Text(stringResource(R.string.pair_need_two), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+        if (others.isEmpty()) {
+            Text(stringResource(R.string.companion_need_other), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
             return@ScreenFrame
         }
-        val seats = listOf(
-            Triple(R.string.pair_driver, screen.driver) { id: PersonId -> Event.PickDriver(id) },
-            Triple(R.string.pair_passenger, screen.passenger) { id: PersonId -> Event.PickPassenger(id) },
-        )
-        Columns(seats, perRow = 2) { (label, chosen, pick) ->
-            Text(stringResource(label), style = PleosType.TitleSmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                library.people.forEach { person ->
-                    ChoiceOption(person.name, chosen == person.id, { send(pick(person.id)) }, Modifier.widthIn(min = 200.dp))
-                }
+        Text(stringResource(R.string.companion_label), style = PleosType.TitleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            others.forEach { person ->
+                ChoiceOption(person.name, screen.companion == person.id, { send(Event.ChooseCompanion(person.id)) }, Modifier.widthIn(min = 200.dp))
             }
         }
-        Problems(screen.problems, Problem.NoDriver, Problem.NoPassenger, Problem.SamePerson)
+        Problems(screen.problems, Problem.NoCompanion)
+        val riders = screen.companion?.let { Riders.of(screen.me, it) } ?: return@ScreenFrame
+        val known = library.relation(riders)
+        val name = library.nameOf(riders.companion)
+        if (known != null && !screen.changingRelation) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.relation_known, name, known.label()), style = PleosType.BodySmall, color = PleosColor.TextSecondary)
+                PleosButton(stringResource(R.string.relation_change), { send(Event.ChangeRelation) }, size = ButtonSize.Small)
+            }
+            return@ScreenFrame
+        }
+        Text(stringResource(R.string.relation_question, name), style = PleosType.TitleSmall)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Relation.entries.forEach { relation ->
+                ChoiceOption(relation.label(), (screen.relation ?: known) == relation, { send(Event.PickRelation(relation)) }, Modifier.widthIn(min = 200.dp))
+            }
+        }
+        Problems(screen.problems, Problem.NoRelation)
     }
 }
 
@@ -429,7 +471,6 @@ private fun OpenerCard(opener: Opener) {
 @Composable
 private fun Reason.label(): String = when (this) {
     Reason.MatchesContext -> stringResource(R.string.reason_context)
-    is Reason.AboutPassenger -> stringResource(R.string.reason_about, name)
     is Reason.SharesInterest -> stringResource(R.string.reason_interest, interest)
 }
 
@@ -458,11 +499,11 @@ private fun SavedTopicsScreen(screen: Screen.SavedTopics, send: (Event) -> Unit)
 
 @Composable
 private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event) -> Unit) {
-    val bond = library.bond(screen.riders)
-    val known = library.person(screen.riders.passenger)?.interests.orEmpty()
+    val bond = library.bond(screen.riders.pair)
+    val known = library.person(screen.riders.companion)?.interests.orEmpty()
     ScreenFrame(
         title = stringResource(R.string.reflect_title),
-        note = stringResource(R.string.reflect_riders, library.nameOf(screen.riders.driver), library.nameOf(screen.riders.passenger), bond.count + 1),
+        note = stringResource(R.string.reflect_riders, library.namesOf(screen.riders), bond.count + 1),
         actions = {
             PleosButton(stringResource(R.string.action_back), { send(Event.Back) })
             PleosButton(stringResource(R.string.reflect_submit), { send(Event.Submit) }, style = ButtonStyle.Primary)
@@ -501,7 +542,7 @@ private fun DrivingScreen(ui: Ui) {
         Text(stringResource(R.string.driving_title), style = PleosType.HeadlineSmall, modifier = Modifier.semantics { heading() })
         Text(stringResource(R.string.driving_body), style = PleosType.BodyMedium, color = PleosColor.TextSecondary, textAlign = TextAlign.Center)
         Text(
-            if (ride != null) stringResource(R.string.driving_voice_on, ui.library.nameOf(ride.riders.passenger))
+            if (ride != null) stringResource(R.string.driving_voice_on, ui.library.nameOf(ride.riders.companion))
             else stringResource(R.string.driving_voice_off),
             style = PleosType.BodySmall,
             textAlign = TextAlign.Center,
