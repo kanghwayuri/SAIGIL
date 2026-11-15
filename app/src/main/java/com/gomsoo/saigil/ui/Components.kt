@@ -139,6 +139,7 @@ fun SelectableCard(
     val shape = RoundedCornerShape(32.dp)
     Column(
         modifier = modifier
+            .fillMaxWidth()
             .shrinkWhenPressed(interaction)
             .clip(shape)
             .background(PleosColor.BackgroundSecondary)

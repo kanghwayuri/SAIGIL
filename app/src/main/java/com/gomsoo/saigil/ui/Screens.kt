@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
@@ -117,7 +116,7 @@ private fun ScreenFrame(
     ) {
         Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
+                Modifier.widthIn(max = 1600.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
                 Text(
@@ -135,26 +134,10 @@ private fun ScreenFrame(
         if (actions != null) {
             HorizontalDivider(color = PleosColor.Divider)
             FlowRow(
-                Modifier.widthIn(max = 1240.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 16.dp),
+                Modifier.widthIn(max = 1600.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) { actions() }
-        }
-    }
-}
-
-/** Items side by side on a wide window, stacked on a narrow one. */
-@Composable
-private fun <T> Columns(items: List<T>, perRow: Int, item: @Composable ColumnScope.(T) -> Unit) {
-    BoxWithConstraints {
-        val columns = if (maxWidth >= 1000.dp) perRow else 1
-        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            items.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    row.forEach { Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { item(it) } }
-                    repeat(columns - row.size) { Box(Modifier.weight(1f)) }
-                }
-            }
         }
     }
 }
@@ -241,7 +224,7 @@ private fun HomeScreen(ui: Ui, send: (Event) -> Unit) {
             Triple(R.string.home_recommend, R.string.home_recommend_body, Event.OpenRecommend),
             Triple(R.string.home_reflect, R.string.home_reflect_body, Event.OpenReflect),
         )
-        Columns(modes, perRow = 3) { (title, body, event) ->
+        modes.forEach { (title, body, event) ->
             SelectableCard(selected = false, onSelect = { send(event) }) {
                 Text(stringResource(title), style = PleosType.Body)
                 Text(stringResource(body), style = PleosType.Caption, color = PleosColor.TextSecondary)
@@ -261,27 +244,30 @@ private fun PeopleScreen(library: Library, me: PersonId?, send: (Event) -> Unit)
         },
     ) {
         if (library.people.isEmpty()) Text(stringResource(R.string.people_empty), style = PleosType.Body, color = PleosColor.TextSecondary)
-        Columns(library.people, perRow = 2) { person ->
-            Column(
+        library.people.forEach { person ->
+            Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(person.name, style = PleosType.Body)
-                    if (person.id == me) Chip(stringResource(R.string.people_me))
-                }
-                if (person.places.isNotEmpty()) {
-                    Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
-                }
-                if (person.interests.isNotEmpty()) {
-                    Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
-                }
-                me?.let { Pair.of(it, person.id) }?.let { pair ->
-                    Text(
-                        stringResource(R.string.people_topics, library.topicsOf(pair).size),
-                        style = PleosType.Caption,
-                        color = PleosColor.TextTertiary,
-                    )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(person.name, style = PleosType.Body)
+                        if (person.id == me) Chip(stringResource(R.string.people_me))
+                    }
+                    if (person.places.isNotEmpty()) {
+                        Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
+                    }
+                    if (person.interests.isNotEmpty()) {
+                        Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
+                    }
+                    me?.let { Pair.of(it, person.id) }?.let { pair ->
+                        Text(
+                            stringResource(R.string.people_topics, library.topicsOf(pair).size),
+                            style = PleosType.Caption,
+                            color = PleosColor.TextTertiary,
+                        )
+                    }
                 }
                 PleosButton(stringResource(R.string.people_edit), { send(Event.EditPerson(person.id)) }, size = ButtonSize.Small)
             }
@@ -439,7 +425,7 @@ private fun ChooseInputScreen(send: (Event) -> Unit) {
             Triple(R.string.input_topic, R.string.input_topic_body, InputKind.Topic),
             Triple(R.string.input_context, R.string.input_context_body, InputKind.Context),
         )
-        Columns(kinds, perRow = 2) { (title, body, kind) ->
+        kinds.forEach { (title, body, kind) ->
             SelectableCard(selected = false, onSelect = { send(Event.ChooseKind(kind)) }) {
                 Text(stringResource(title), style = PleosType.Body)
                 Text(stringResource(body), style = PleosType.Caption, color = PleosColor.TextSecondary)
@@ -468,7 +454,7 @@ private fun OpenersScreen(screen: Screen.Openers, send: (Event) -> Unit) {
             PleosButton(stringResource(R.string.action_done), { send(Event.Done) }, style = ButtonStyle.Primary)
         },
     ) {
-        Columns(screen.cards, perRow = 3) { OpenerCard(it) }
+        screen.cards.forEach { OpenerCard(it) }
     }
 }
 
@@ -503,7 +489,7 @@ private fun SavedTopicsScreen(screen: Screen.SavedTopics, send: (Event) -> Unit)
         },
     ) {
         if (screen.picks.isEmpty()) Text(stringResource(R.string.saved_empty), style = PleosType.Body, color = PleosColor.TextSecondary)
-        Columns(screen.picks, perRow = 3) { pick ->
+        screen.picks.forEach { pick ->
             SelectableCard(selected = false, onSelect = { send(Event.ChooseTopic(pick.topic.id)) }) {
                 Text(pick.topic.text, style = PleosType.Body)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
