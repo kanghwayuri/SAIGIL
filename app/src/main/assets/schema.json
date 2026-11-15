@@ -1,19 +1,20 @@
 {
   "packageName": "com.gomsoo.saigil",
-  "appDescription": "SAIGIL helps the user and the person riding with them talk on the road by suggesting how to open a topic and which saved topic fits the moment.",
+  "appDescription": "SAIGIL is a conversation helper for the car. It recommends what the user can say to the person riding with them, how to start a conversation on any subject, and which of the user's saved conversation topics fits now.",
   "version": "1.0",
+  "invokeWord": "사이길",
   "actionCalls": [
     {
       "type": "function",
       "function": {
         "name": "RECOMMEND_OPENER",
-        "description": "Suggests three different ways to start a conversation about a topic the user names, worded for the person riding with the user.",
+        "description": "Recommends what the user can say to start or continue a conversation with the person riding with them about any subject the user names, whatever that subject is. Returns three conversation openers.",
         "parameters": {
           "type": "object",
           "properties": {
             "topic": {
               "type": "string",
-              "description": "The topic the user wants to talk about, in the user's own words."
+              "description": "The subject the user wants to talk about with the person riding with them, in the user's own words."
             },
             "companion": {
               "type": "string",
@@ -29,7 +30,7 @@
       "type": "function",
       "function": {
         "name": "RECOMMEND_SAVED_TOPIC",
-        "description": "Picks up to three topics the user saved earlier that fit the current situation the user describes.",
+        "description": "Recommends which conversation topics the user saved earlier to bring up with the person riding with them, based on the current situation or mood the user describes, or when the user asks what to talk about.",
         "parameters": {
           "type": "object",
           "properties": {
