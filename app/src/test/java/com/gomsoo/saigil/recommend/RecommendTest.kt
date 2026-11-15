@@ -19,15 +19,17 @@ class RecommendTest {
 
     private val day = 24L * 60 * 60 * 1000
     private val now = 100 * day
-    private val me = Person(PersonId("me"), "지수", Relation.Me)
-    private val mom = Person(PersonId("mom"), "엄마", Relation.Parent, interests = listOf("요가"))
-    private val friend = Person(PersonId("f"), "민호", Relation.Friend)
-    private val withMom = Riders(me.id, mom.id)
-    private val withFriend = Riders(me.id, friend.id)
+    private val me = Person(PersonId("me"), "지수")
+    private val mom = Person(PersonId("mom"), "엄마", interests = listOf("요가"))
+    private val friend = Person(PersonId("f"), "민호")
+    private val withMom = Riders.of(me.id, mom.id)!!
+    private val withFriend = Riders.of(me.id, friend.id)!!
     private val people = Library(people = listOf(me, mom, friend))
+        .relate(withMom, Relation.Parent)
+        .relate(withFriend, Relation.Friend)
 
-    private fun topic(id: String, text: String, about: Set<PersonId> = emptySet(), addedAt: Long = 0, usedAt: Long? = null) =
-        Topic(TopicId(id), text, about, addedAt, usedAt)
+    private fun topic(id: String, text: String, riders: Riders = withFriend, addedAt: Long = 0, usedAt: Long? = null) =
+        Topic(TopicId(id), text, riders.pair, addedAt, usedAt)
 
     private val formalEnding = Regex("요[.?!]$")
 
@@ -41,14 +43,15 @@ class RecommendTest {
     }
 
     @Test
-    fun `a parent passenger is spoken to formally and a friend casually`() {
+    fun `a parent is spoken to formally, and that parent speaks back to their child casually`() {
         openers("바다 여행", withMom, people).forEach { assertTrue(it.first, formalEnding.containsMatchIn(it.first)) }
+        openers("바다 여행", Riders.of(mom.id, me.id)!!, people).forEach { assertFalse(it.first, formalEnding.containsMatchIn(it.first)) }
         openers("바다 여행", withFriend, people).forEach { assertFalse(it.first, formalEnding.containsMatchIn(it.first)) }
     }
 
     @Test
     fun `after an awkward ride the first opener is a light question`() {
-        val library = people.record(Ride(me.id, friend.id, at = 1, flow = Flow.Awkward))
+        val library = people.record(Ride(friend.id, me.id, at = 1, flow = Flow.Awkward))
 
         assertEquals(Approach.Ask, openers("주말 계획", withFriend, library).first().approach)
     }
@@ -71,23 +74,34 @@ class RecommendTest {
     }
 
     @Test
-    fun `a topic about the passenger beats an equal one, and a recently used one drops`() {
+    fun `a topic saved by one person is found when the other is the user, and another pair's never is`() {
         val library = people.copy(
             topics = listOf(
-                topic("plain", "가을 캠핑", addedAt = 3),
-                topic("used", "캠핑 장비 고르기", addedAt = 2, usedAt = now - day),
-                topic("mine", "캠핑 사진 정리", about = setOf(friend.id), addedAt = 1),
+                topic("ours", "가을 캠핑 계획", Riders.of(friend.id, me.id)!!),
+                topic("theirs", "캠핑 장비 고르기", Riders.of(mom.id, friend.id)!!),
+                topic("mine-with-mom", "캠핑 사진 정리", withMom),
             ),
         )
 
-        val ids = topicsFor("캠핑 가고 싶다", withFriend, library, now).map { it.topic.id.value }
-
-        assertEquals(listOf("mine", "plain", "used"), ids)
+        assertEquals(listOf("ours"), topicsFor("캠핑 가고 싶다", withFriend, library, now).map { it.topic.id.value })
+        assertEquals(listOf("mine-with-mom"), topicsFor("캠핑 가고 싶다", withMom, library, now).map { it.topic.id.value })
     }
 
     @Test
-    fun `a topic that matches a passenger interest says so`() {
-        val library = people.copy(topics = listOf(topic("yoga", "요가 학원 등록한 얘기")))
+    fun `a recently used topic drops below an unused one`() {
+        val library = people.copy(
+            topics = listOf(
+                topic("used", "캠핑 장비 고르기", addedAt = 2, usedAt = now - day),
+                topic("plain", "가을 캠핑", addedAt = 1),
+            ),
+        )
+
+        assertEquals(listOf("plain", "used"), topicsFor("캠핑 가고 싶다", withFriend, library, now).map { it.topic.id.value })
+    }
+
+    @Test
+    fun `a topic that matches the companion's interest says so`() {
+        val library = people.copy(topics = listOf(topic("yoga", "요가 학원 등록한 얘기", withMom)))
 
         val pick = topicsFor("오늘 날씨 좋다", withMom, library, now).single()
 
@@ -98,8 +112,8 @@ class RecommendTest {
     fun `proactive goes saved topic, then trending, then balance game, never repeating in a ride`() {
         val library = people.copy(
             topics = listOf(
-                topic("sea", "바다 여행 가고 싶다던 얘기", about = setOf(friend.id)),
-                topic("other", "엄마 요가 학원", about = setOf(mom.id)),
+                topic("sea", "바다 여행 가고 싶다던 얘기"),
+                topic("other", "엄마 요가 학원", withMom),
             ),
         )
         val said = mutableSetOf<String>()
@@ -113,7 +127,7 @@ class RecommendTest {
 
         assertEquals("topic:sea", spoken.first().key)
         assertTrue("바다 여행" in spoken.first().sentence)
-        assertFalse("a topic about someone else is never spoken", spoken.any { it.key == "topic:other" })
+        assertFalse("another pair's topic is never spoken", spoken.any { it.key == "topic:other" })
         assertEquals(listOf("topic", "trend", "balance"), spoken.map { it.key.substringBefore(':') }.distinct())
         assertNull(proactive(Trigger.Jam, withFriend, library, said, now))
     }
