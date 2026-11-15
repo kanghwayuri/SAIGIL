@@ -108,33 +108,54 @@ class RecommendTest {
         assertTrue(pick.reasons.toString(), Reason.SharesInterest("요가") in pick.reasons)
     }
 
-    @Test
-    fun `proactive goes saved topic, then trending, then balance game, never repeating in a ride`() {
-        val library = people.copy(
-            topics = listOf(
-                topic("sea", "바다 여행 가고 싶다던 얘기"),
-                topic("other", "엄마 요가 학원", withMom),
-            ),
-        )
+    private fun everything(situation: Situation, library: Library): List<Suggestion> {
         val said = mutableSetOf<String>()
         val spoken = mutableListOf<Suggestion>()
         while (true) {
-            val next = proactive(Trigger.Jam, withFriend, library, said, now) ?: break
+            val next = proactive(situation, withFriend, library, said, now) ?: break
             assertFalse("repeated ${next.key}", next.key in said)
             said += next.key
             spoken += next
         }
+        assertNull(proactive(situation, withFriend, library, said, now))
+        return spoken
+    }
 
-        assertEquals("topic:sea", spoken.first().key)
-        assertTrue("바다 여행" in spoken.first().sentence)
-        assertFalse("another pair's topic is never spoken", spoken.any { it.key == "topic:other" })
-        assertEquals(listOf("topic", "trend", "balance"), spoken.map { it.key.substringBefore(':') }.distinct())
-        assertNull(proactive(Trigger.Jam, withFriend, library, said, now))
+    private val twoPairs = people.copy(
+        topics = listOf(topic("sea", "바다 여행 가고 싶다던 얘기"), topic("other", "엄마 요가 학원", withMom)),
+    )
+
+    @Test
+    fun `on a highway proactive goes saved topic, then trend, then balance game, never repeating in a ride`() {
+        val spoken = everything(Situation.Highway(42), twoPairs)
+
+        assertEquals(Suggestion.SavedTopic(TopicId("sea"), "바다 여행 가고 싶다던 얘기"), spoken.first())
+        assertFalse("another pair's topic is never spoken", spoken.any { it is Suggestion.SavedTopic && it.id == TopicId("other") })
+        assertEquals(
+            listOf(Suggestion.SavedTopic::class, Suggestion.Trend::class, Suggestion.BalanceGame::class),
+            spoken.map { it::class }.distinct(),
+        )
     }
 
     @Test
-    fun `the trigger sets the first words`() {
-        assertTrue(proactive(Trigger.LongDrive, withFriend, people, emptySet(), now)!!.sentence.startsWith("한동안 길게"))
-        assertTrue(proactive(Trigger.Jam, withFriend, people, emptySet(), now)!!.sentence.startsWith("길이 막히네요"))
+    fun `in a jam proactive starts with a balance game, then saved topics, then trends`() {
+        val spoken = everything(Situation.Jam(2300, 12), twoPairs)
+
+        assertTrue(spoken.first() is Suggestion.BalanceGame)
+        assertEquals(
+            listOf(Suggestion.BalanceGame::class, Suggestion.SavedTopic::class, Suggestion.Trend::class),
+            spoken.map { it::class }.distinct(),
+        )
+    }
+
+    @Test
+    fun `each kind of suggestion says what it suggests`() {
+        val topic = Suggestion.SavedTopic(TopicId("sea"), "바다 여행 가고 싶다던 얘기").sentence
+        val trend = Suggestion.Trend("요즘 자주 듣는 노래를 하나씩 말해 봐요.").sentence
+        val game = Suggestion.BalanceGame("짜장면", "짬뽕").sentence
+
+        assertTrue(topic, "저장해 둔 화제" in topic && "바다 여행 가고 싶다던 얘기" in topic)
+        assertTrue(trend, "요즘 자주 듣는 노래를 하나씩 말해 봐요." in trend)
+        assertTrue(game, "밸런스 게임" in game && "짜장면" in game && "짬뽕" in game)
     }
 }

@@ -1,5 +1,6 @@
 package com.gomsoo.saigil.drive
 
+import ai.pleos.playground.navi.data.DrivingInfo
 import ai.pleos.playground.navi.data.RouteStateInfo
 import ai.pleos.playground.navi.data.TBTInfo
 import ai.pleos.playground.navi.helper.NaviHelper
@@ -14,21 +15,21 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.gomsoo.saigil.library.LibraryStore
-import com.gomsoo.saigil.recommend.Trigger
+import com.gomsoo.saigil.recommend.Situation
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val TAG = "SaigilDrive"
 
 /**
- * Turns navigation signals into spoken suggestions for the active ride. Everything runs on the main thread.
- * The screen is off-limits while driving, so this speaks instead of showing anything.
+ * Turns navigation signals into spoken suggestions for the active ride, and feeds [Drive] the board the driver sees.
+ * Everything runs on the main thread.
  */
 @SuppressLint("MissingPermission") // NAVI_ROUTE and TTS_SERVICE are normal permissions declared in the manifest.
-class RideCompanion(private val context: Context, private val store: LibraryStore, private val rides: Rides) {
+class RideCompanion(private val context: Context, private val drive: Drive) {
 
     private val main = Handler(Looper.getMainLooper())
-    private val spokenAt = mutableMapOf<Trigger, Long>()
+    private var remainingKm: Int? = null
     private var navi: NaviHelper? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -51,25 +52,27 @@ class RideCompanion(private val context: Context, private val store: LibraryStor
         startSpeech()
     }
 
-    fun onTrigger(trigger: Trigger) = main.post {
-        when (val decision = decide(trigger, rides.active.value, store.library.value, spokenAt, System.currentTimeMillis())) {
+    fun onSituation(situation: Situation) = main.post {
+        when (val decision = drive.on(situation, System.currentTimeMillis())) {
             is Decision.Speak -> {
-                spokenAt[trigger] = System.currentTimeMillis()
-                rides.said(decision.suggestion.key)
-                Log.i(TAG, "trigger=$trigger key=${decision.suggestion.key} speak: ${decision.suggestion.sentence}")
-                speak(decision.suggestion.sentence)
+                Log.i(TAG, "situation=$situation key=${decision.suggestion.key} speak: ${decision.line}")
+                speak(decision.line)
             }
-            else -> Log.i(TAG, "trigger=$trigger quiet: $decision")
+            else -> Log.i(TAG, "situation=$situation quiet: $decision")
         }
     }
 
     private val navigation = object : NaviHelperEventListener {
+        override fun onDrivingInfo(drivingInfo: DrivingInfo) {
+            remainingKm = drivingInfo.destination?.distance?.let { (it / 1000.0).roundToInt() }
+        }
+
         override fun onTBTInfo(tbtInfoList: List<TBTInfo>) {
-            longDriveFrom(tbtInfoList)?.let(::onTrigger)
+            highwayFrom(tbtInfoList, remainingKm)?.let(::onSituation)
         }
 
         override fun onRouteStateInfo(routeStateInfo: RouteStateInfo) {
-            routeStateInfo.trafficStatus?.let { jamFrom(it.congestionItemList) }?.let(::onTrigger)
+            routeStateInfo.trafficStatus?.let { jamFrom(it.congestionItemList) }?.let(::onSituation)
         }
     }
 

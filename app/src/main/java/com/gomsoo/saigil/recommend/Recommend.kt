@@ -4,6 +4,7 @@ import com.gomsoo.saigil.library.Flow
 import com.gomsoo.saigil.library.Library
 import com.gomsoo.saigil.library.Riders
 import com.gomsoo.saigil.library.Topic
+import com.gomsoo.saigil.library.TopicId
 
 data class Opener(val approach: Approach, val first: String, val followUp: String)
 
@@ -14,10 +15,39 @@ sealed interface Reason {
 
 data class TopicPick(val topic: Topic, val reasons: List<Reason>)
 
-enum class Trigger { LongDrive, Jam }
+/** What the road is doing now, as far as navigation tells. Unknown numbers stay null. */
+sealed interface Situation {
+    data class Highway(val remainingKm: Int?) : Situation
+    data class Jam(val lengthM: Int?, val avgSpeedKmh: Int?) : Situation
+}
 
-/** One spoken recommendation. [key] identifies what was said so a ride never hears it twice. */
-data class Suggestion(val key: String, val sentence: String)
+/** One proactive recommendation. [key] identifies it so a ride never hears it twice. */
+sealed interface Suggestion {
+    val key: String
+    val sentence: String
+
+    data class SavedTopic(val id: TopicId, val text: String) : Suggestion {
+        override val key get() = "topic:${id.value}"
+        override val sentence get() = "저장해 둔 화제 하나 꺼내 볼까요? $text"
+    }
+
+    data class Trend(val text: String) : Suggestion {
+        override val key get() = "trend:$text"
+        override val sentence get() = "요즘 이야깃거리 하나 어때요? $text"
+    }
+
+    data class BalanceGame(val a: String, val b: String) : Suggestion {
+        override val key get() = "balance:$a|$b"
+        override val sentence get() = "가볍게 밸런스 게임 해 볼까요? $a, $b 중에 고른다면요?"
+    }
+}
+
+/** The words said before a suggestion, so the riders hear why it came up now. */
+val Situation.lead: String
+    get() = when (this) {
+        is Situation.Highway -> "한동안 길게 달려요."
+        is Situation.Jam -> "길이 막히네요."
+    }
 
 private const val RECENT_MS = 3L * 24 * 60 * 60 * 1000
 
@@ -43,17 +73,19 @@ fun openers(topic: String, riders: Riders, library: Library): List<Opener> {
 fun topicsFor(context: String, riders: Riders, library: Library, now: Long): List<TopicPick> =
     ranked(context, riders, library, now).take(3)
 
-/** One sentence to say aloud, or null once everything has been said this ride. */
-fun proactive(trigger: Trigger, riders: Riders, library: Library, said: Set<String>, now: Long): Suggestion? {
-    val lead = when (trigger) {
-        Trigger.LongDrive -> "한동안 길게 달려요."
-        Trigger.Jam -> "길이 막히네요."
+/**
+ * The next suggestion for [situation], or null once everything has been said this ride.
+ * A jam starts with a balance game because a stopped car suits a quick back-and-forth.
+ */
+fun proactive(situation: Situation, riders: Riders, library: Library, said: Set<String>, now: Long): Suggestion? {
+    val saved = ranked("", riders, library, now).map { Suggestion.SavedTopic(it.topic.id, it.topic.text) }
+    val trends = trending.map { Suggestion.Trend(it) }
+    val games = balanceGames.map { (a, b) -> Suggestion.BalanceGame(a, b) }
+    val order = when (situation) {
+        is Situation.Highway -> saved + trends + games
+        is Situation.Jam -> games + saved + trends
     }
-    val saved = ranked("", riders, library, now)
-        .map { Suggestion("topic:${it.topic.id.value}", "$lead 저장해 둔 화제 하나 꺼내 볼까요? ${it.topic.text}") }
-    val trends = trending.mapIndexed { i, text -> Suggestion("trend:$i", "$lead 요즘 이야깃거리 하나 어때요? $text") }
-    val games = balanceGames.mapIndexed { i, text -> Suggestion("balance:$i", "$lead 가볍게 밸런스 게임 해 볼까요? $text") }
-    return (saved + trends + games).firstOrNull { it.key !in said }
+    return order.firstOrNull { it.key !in said }
 }
 
 private fun ranked(context: String, riders: Riders, library: Library, now: Long): List<TopicPick> {

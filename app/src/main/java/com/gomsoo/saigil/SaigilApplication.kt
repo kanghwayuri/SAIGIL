@@ -1,6 +1,7 @@
 package com.gomsoo.saigil
 
 import android.app.Application
+import com.gomsoo.saigil.drive.Drive
 import com.gomsoo.saigil.drive.RideCompanion
 import com.gomsoo.saigil.drive.Rides
 import com.gomsoo.saigil.library.LibraryStore
@@ -18,7 +19,8 @@ class SaigilApplication : Application() {
     /** Memory only, so every entry into the app asks again. */
     val me = MutableStateFlow<PersonId?>(null)
     val rides = Rides()
-    val companion by lazy { RideCompanion(this, store, rides) }
+    val drive = Drive(rides) { store.library.value }
+    val companion by lazy { RideCompanion(this, drive) }
 
     override fun onCreate() {
         super.onCreate()
