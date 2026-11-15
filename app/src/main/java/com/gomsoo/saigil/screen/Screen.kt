@@ -18,7 +18,8 @@ import com.gomsoo.saigil.vehicle.Restriction
 const val NAME_LIMIT = 20
 const val TEXT_LIMIT = 100
 
-enum class Purpose { Recommend, Reflect }
+/** What the companion is picked for. */
+enum class Purpose { SaveTopic, Recommend, Reflect }
 
 enum class InputKind { Topic, Context }
 
@@ -41,27 +42,35 @@ sealed interface Heard {
 /** Spoken input that stays editable. The keyboard works whether or not recognition does. */
 data class Capture(val stt: Stt = Stt.Idle, val text: String = "")
 
-enum class Problem { NoName, NoRelation, NoDriver, NoPassenger, SamePerson, NoText, NoFlow }
+enum class Problem { NoName, NoCompanion, NoRelation, NoText, NoFlow }
 
 data class PersonDraft(
     val id: PersonId? = null,
     val name: String = "",
-    val relation: Relation? = null,
     val places: String = "",
     val interests: String = "",
 )
 
 sealed interface Screen {
+    /** Every entry starts here: the user says which profile is theirs. */
+    data object WhoAmI : Screen
     data object Home : Screen
     data object People : Screen
-    data class PersonEdit(val draft: PersonDraft, val problems: Set<Problem> = emptySet()) : Screen
-    data class TopicCapture(val person: PersonId, val capture: Capture = Capture(), val problems: Set<Problem> = emptySet()) : Screen
-    data class PickPair(
+    /** [forMe] when the profile is being made from [WhoAmI], so saving it makes it the user. */
+    data class PersonEdit(val draft: PersonDraft, val forMe: Boolean = false, val problems: Set<Problem> = emptySet()) : Screen
+    /**
+     * The user is fixed as [me]; only the companion is picked. [relation] is what the user chose on this screen.
+     * The relation is asked when the pair has none yet, or when [changingRelation].
+     */
+    data class PickCompanion(
         val purpose: Purpose,
-        val driver: PersonId?,
-        val passenger: PersonId?,
+        val me: PersonId,
+        val companion: PersonId? = null,
+        val relation: Relation? = null,
+        val changingRelation: Boolean = false,
         val problems: Set<Problem> = emptySet(),
     ) : Screen
+    data class TopicCapture(val riders: Riders, val capture: Capture = Capture(), val problems: Set<Problem> = emptySet()) : Screen
     data class ChooseInput(val riders: Riders) : Screen
     data class Listen(
         val riders: Riders,
@@ -80,10 +89,13 @@ sealed interface Screen {
 }
 
 /** The app shows the driving screen over [screen] whenever [vehicle] is restricted. */
-data class Model(val screen: Screen = Screen.Home, val vehicle: Restriction = Restriction.Unknown)
+data class Model(val screen: Screen = Screen.WhoAmI, val vehicle: Restriction = Restriction.Unknown)
 
 sealed interface Event {
+    data class ChooseMe(val id: PersonId) : Event
+    data object ChangeMe : Event
     data object OpenPeople : Event
+    data object OpenSaveTopic : Event
     data object OpenRecommend : Event
     data object OpenReflect : Event
     data object Back : Event
@@ -92,13 +104,13 @@ sealed interface Event {
     data object Submit : Event
     data object AddPerson : Event
     data class EditPerson(val id: PersonId) : Event
-    data class AddTopicFor(val id: PersonId) : Event
     data class EditDraft(val draft: PersonDraft) : Event
     data object Mic : Event
     data class Speech(val heard: Heard) : Event
     data class EditText(val text: String) : Event
-    data class PickDriver(val id: PersonId) : Event
-    data class PickPassenger(val id: PersonId) : Event
+    data class ChooseCompanion(val id: PersonId) : Event
+    data class PickRelation(val relation: Relation) : Event
+    data object ChangeRelation : Event
     data class ChooseKind(val kind: InputKind) : Event
     data class ChooseTopic(val id: TopicId) : Event
     data class PickFlow(val flow: Flow) : Event
@@ -128,6 +140,13 @@ sealed interface Effect {
         override fun applyTo(library: Library) = library.record(ride)
     }
 
+    data class Relate(val riders: Riders, val relation: Relation) : Write {
+        override fun applyTo(library: Library) = library.relate(riders, relation)
+    }
+
+    /** Makes [me] the current user for the rest of the process. */
+    data class BecomeMe(val me: PersonId) : Effect
+
     data class BeginRide(val riders: Riders) : Effect
     data object StartListening : Effect
     data object StopListening : Effect
@@ -142,7 +161,8 @@ private typealias Step = Pair<Screen, List<Effect>>
 
 private fun stay(screen: Screen): Step = screen to emptyList()
 
-fun reduce(model: Model, event: Event, library: Library, stamp: Stamp): Next = when {
+/** [me] is the current user, null until [Screen.WhoAmI] is answered. */
+fun reduce(model: Model, event: Event, library: Library, me: PersonId?, stamp: Stamp): Next = when {
     event is Event.VehicleChanged -> {
         val (screen, effects) = if (event.restriction == Restriction.Restricted) silence(model.screen) else stay(model.screen)
         Next(Model(screen, event.restriction), effects)
@@ -150,7 +170,7 @@ fun reduce(model: Model, event: Event, library: Library, stamp: Stamp): Next = w
     event is Event.PageHidden -> silence(model.screen).let { (screen, effects) -> Next(model.copy(screen = screen), effects) }
     // Nothing on screen takes input while driving. Spoken suggestions come from the drive companion instead.
     model.vehicle == Restriction.Restricted -> Next(model)
-    else -> step(model.screen, event, library, stamp).let { (screen, effects) -> Next(model.copy(screen = screen), effects) }
+    else -> step(model.screen, event, library, me, stamp).let { (screen, effects) -> Next(model.copy(screen = screen), effects) }
 }
 
 private fun silence(screen: Screen): Step {
@@ -174,51 +194,62 @@ private fun Screen.withCapture(capture: Capture): Screen = when (this) {
     else -> this
 }
 
-private fun step(screen: Screen, event: Event, library: Library, stamp: Stamp): Step {
+private fun step(screen: Screen, event: Event, library: Library, me: PersonId?, stamp: Stamp): Step {
     screen.capture?.let { capture -> listen(capture, event)?.let { (next, effects) -> return screen.withCapture(next) to effects } }
+    fun pickCompanion(purpose: Purpose): Screen = me?.let { Screen.PickCompanion(purpose, it) } ?: Screen.WhoAmI
     return when (screen) {
+        Screen.WhoAmI -> when (event) {
+            is Event.ChooseMe -> library.person(event.id)?.let { Screen.Home to listOf(Effect.BecomeMe(it.id)) } ?: stay(screen)
+            Event.AddPerson -> stay(Screen.PersonEdit(PersonDraft(), forMe = true))
+            Event.Back -> stay(if (me != null) Screen.Home else screen)
+            else -> stay(screen)
+        }
         Screen.Home -> when (event) {
+            Event.ChangeMe -> stay(Screen.WhoAmI)
             Event.OpenPeople -> stay(Screen.People)
-            Event.OpenRecommend -> stay(pickPair(Purpose.Recommend, library))
-            Event.OpenReflect -> stay(pickPair(Purpose.Reflect, library))
+            Event.OpenRecommend -> stay(pickCompanion(Purpose.Recommend))
+            Event.OpenReflect -> stay(pickCompanion(Purpose.Reflect))
             else -> stay(screen)
         }
         Screen.People -> when (event) {
             Event.Back -> stay(Screen.Home)
             Event.AddPerson -> stay(Screen.PersonEdit(PersonDraft()))
             is Event.EditPerson -> library.person(event.id)?.let { stay(Screen.PersonEdit(it.toDraft())) } ?: stay(screen)
-            is Event.AddTopicFor -> stay(Screen.TopicCapture(event.id))
+            Event.OpenSaveTopic -> stay(pickCompanion(Purpose.SaveTopic))
             else -> stay(screen)
         }
         is Screen.PersonEdit -> when (event) {
-            Event.Back -> stay(Screen.People)
+            Event.Back -> stay(if (screen.forMe) Screen.WhoAmI else Screen.People)
             is Event.EditDraft -> stay(screen.copy(draft = event.draft.limited(), problems = emptySet()))
             Event.Submit -> savePerson(screen, stamp)
             else -> stay(screen)
         }
+        is Screen.PickCompanion -> when (event) {
+            Event.Back -> stay(if (screen.purpose == Purpose.SaveTopic) Screen.People else Screen.Home)
+            Event.OpenPeople -> stay(Screen.People)
+            is Event.ChooseCompanion -> stay(
+                if (event.id == screen.me) screen else screen.copy(companion = event.id, relation = null, changingRelation = false, problems = emptySet()),
+            )
+            is Event.PickRelation -> stay(screen.copy(relation = event.relation, problems = emptySet()))
+            Event.ChangeRelation -> stay(screen.copy(changingRelation = true))
+            Event.Submit -> confirmCompanion(screen, library)
+            else -> stay(screen)
+        }
         is Screen.TopicCapture -> when (event) {
-            Event.Back -> leaveCapture(screen.capture, Screen.People)
+            Event.Back -> leaveCapture(screen.capture, backToPick(Purpose.SaveTopic, screen.riders))
             Event.Submit -> {
                 val text = screen.capture.text.trim()
                 if (text.isEmpty()) {
                     stay(screen.copy(problems = setOf(Problem.NoText)))
                 } else {
                     Screen.People to stopIfListening(screen.capture) +
-                        Effect.AddTopic(Topic(TopicId(stamp.id), text, setOf(screen.person), addedAt = stamp.now))
+                        Effect.AddTopic(Topic(TopicId(stamp.id), text, screen.riders.pair, addedAt = stamp.now))
                 }
             }
             else -> stay(screen)
         }
-        is Screen.PickPair -> when (event) {
-            Event.Back -> stay(Screen.Home)
-            Event.OpenPeople -> stay(Screen.People)
-            is Event.PickDriver -> stay(screen.copy(driver = event.id, problems = emptySet()))
-            is Event.PickPassenger -> stay(screen.copy(passenger = event.id, problems = emptySet()))
-            Event.Submit -> confirmPair(screen)
-            else -> stay(screen)
-        }
         is Screen.ChooseInput -> when (event) {
-            Event.Back -> stay(Screen.PickPair(Purpose.Recommend, screen.riders.driver, screen.riders.passenger))
+            Event.Back -> stay(backToPick(Purpose.Recommend, screen.riders))
             is Event.ChooseKind -> stay(Screen.Listen(screen.riders, event.kind))
             else -> stay(screen)
         }
@@ -242,13 +273,13 @@ private fun step(screen: Screen, event: Event, library: Library, stamp: Stamp): 
             else -> stay(screen)
         }
         is Screen.Reflect -> when (event) {
-            Event.Back -> stay(Screen.PickPair(Purpose.Reflect, screen.riders.driver, screen.riders.passenger))
+            Event.Back -> stay(backToPick(Purpose.Reflect, screen.riders))
             is Event.PickFlow -> stay(screen.copy(flow = event.flow, problems = emptySet()))
             is Event.EditText -> stay(screen.copy(discovered = event.text.take(TEXT_LIMIT)))
             Event.Submit -> when (val flow = screen.flow) {
                 null -> stay(screen.copy(problems = setOf(Problem.NoFlow)))
                 else -> Screen.Home to listOf(
-                    Effect.RecordRide(Ride(screen.riders.driver, screen.riders.passenger, stamp.now, flow, splitList(screen.discovered))),
+                    Effect.RecordRide(Ride(screen.riders.me, screen.riders.companion, stamp.now, flow, splitList(screen.discovered))),
                 )
             }
             else -> stay(screen)
@@ -279,23 +310,19 @@ private fun listen(capture: Capture, event: Event): Pair<Capture, List<Effect>>?
 
 private fun leaveCapture(capture: Capture, to: Screen): Step = to to stopIfListening(capture)
 
-private fun pickPair(purpose: Purpose, library: Library) =
-    Screen.PickPair(purpose, driver = library.people.firstOrNull { it.relation == Relation.Me }?.id, passenger = null)
+private fun backToPick(purpose: Purpose, riders: Riders) = Screen.PickCompanion(purpose, riders.me, riders.companion)
 
-private fun confirmPair(screen: Screen.PickPair): Step {
-    val problems = buildSet {
-        if (screen.driver == null) add(Problem.NoDriver)
-        if (screen.passenger == null) add(Problem.NoPassenger)
-        if (screen.driver != null && screen.driver == screen.passenger) add(Problem.SamePerson)
+/** A pair is asked its relation once. After that it is only changed on request. */
+private fun confirmCompanion(screen: Screen.PickCompanion, library: Library): Step {
+    val riders = screen.companion?.let { Riders.of(screen.me, it) } ?: return stay(screen.copy(problems = setOf(Problem.NoCompanion)))
+    val known = library.relation(riders)
+    val relation = screen.relation ?: known ?: return stay(screen.copy(problems = setOf(Problem.NoRelation)))
+    val next = when (screen.purpose) {
+        Purpose.SaveTopic -> Screen.TopicCapture(riders)
+        Purpose.Recommend -> Screen.ChooseInput(riders)
+        Purpose.Reflect -> Screen.Reflect(riders)
     }
-    if (problems.isNotEmpty()) return stay(screen.copy(problems = problems))
-    val riders = Riders(screen.driver!!, screen.passenger!!)
-    return stay(
-        when (screen.purpose) {
-            Purpose.Recommend -> Screen.ChooseInput(riders)
-            Purpose.Reflect -> Screen.Reflect(riders)
-        },
-    )
+    return next to if (relation == known) emptyList() else listOf(Effect.Relate(riders, relation))
 }
 
 private fun recommend(screen: Screen.Listen, library: Library, stamp: Stamp): Step {
@@ -310,23 +337,21 @@ private fun recommend(screen: Screen.Listen, library: Library, stamp: Stamp): St
 
 private fun savePerson(screen: Screen.PersonEdit, stamp: Stamp): Step {
     val draft = screen.draft
-    val problems = buildSet {
-        if (draft.name.isBlank()) add(Problem.NoName)
-        if (draft.relation == null) add(Problem.NoRelation)
-    }
-    if (problems.isNotEmpty()) return stay(screen.copy(problems = problems))
+    if (draft.name.isBlank()) return stay(screen.copy(problems = setOf(Problem.NoName)))
     val person = Person(
         id = draft.id ?: PersonId(stamp.id),
         name = draft.name.trim(),
-        relation = draft.relation!!,
         places = splitList(draft.places),
         interests = splitList(draft.interests),
     )
-    val next = if (draft.id == null) Screen.TopicCapture(person.id) else Screen.People
-    return next to listOf(Effect.PutPerson(person))
+    return if (screen.forMe) {
+        Screen.Home to listOf(Effect.PutPerson(person), Effect.BecomeMe(person.id))
+    } else {
+        Screen.People to listOf(Effect.PutPerson(person))
+    }
 }
 
-private fun Person.toDraft() = PersonDraft(id, name, relation, places.joinToString(", "), interests.joinToString(", "))
+private fun Person.toDraft() = PersonDraft(id, name, places.joinToString(", "), interests.joinToString(", "))
 
 private fun PersonDraft.limited() = copy(
     name = name.take(NAME_LIMIT),
