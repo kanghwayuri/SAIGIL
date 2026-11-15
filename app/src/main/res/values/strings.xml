@@ -109,6 +109,10 @@
     <string name="reflect_discovered">새로 발견한 관심사 (쉼표로 구분)</string>
     <string name="reflect_known">지금까지 알게 된 관심사: %1$s</string>
     <string name="reflect_submit">남기기</string>
+    <string name="reflect_why">남겨 주신 내용은 다음 대화 추천에 반영돼요.</string>
+    <string name="reflected_title">기록을 저장했어요</string>
+    <string name="reflected_ride">%1$s 님과 함께한 길 %2$d번째를 남겼어요.</string>
+    <string name="reflected_interests">%2$s 님 관심사에 새로 더했어요 · %1$s</string>
 
     <string name="driving_title">주행 중이에요</string>
     <string name="driving_body">화면 조작은 안전하게 주차한 뒤에 할 수 있어요.</string>

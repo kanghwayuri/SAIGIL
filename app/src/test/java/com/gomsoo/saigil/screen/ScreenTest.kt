@@ -186,6 +186,8 @@ class ScreenTest {
 
         send(Event.PickFlow(Flow.Smooth), Event.EditText("캠핑, 트로트"), Event.Submit)
 
+        assertEquals(listOf("캠핑", "트로트"), screen<Screen.Reflected>().discovered)
+        send(Event.Done)
         assertEquals(Screen.Home, model.screen)
         assertEquals(listOf("요가", "캠핑", "트로트"), library.person(mom.id)!!.interests)
         assertEquals(Flow.Smooth, library.bond(Pair.of(dad.id, mom.id)!!).lastFlow)

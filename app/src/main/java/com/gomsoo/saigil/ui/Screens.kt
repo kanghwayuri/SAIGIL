@@ -99,6 +99,7 @@ fun SaigilApp(ui: Ui, send: (Event) -> Unit) {
         is Screen.Openers -> OpenersScreen(screen, send)
         is Screen.SavedTopics -> SavedTopicsScreen(screen, send)
         is Screen.Reflect -> ReflectScreen(screen, library, send)
+        is Screen.Reflected -> ReflectedScreen(screen, library, send)
     }
 }
 
@@ -525,6 +526,7 @@ private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event
             PleosButton(stringResource(R.string.reflect_submit), { send(Event.Submit) }, style = ButtonStyle.Primary)
         },
     ) {
+        Text(stringResource(R.string.reflect_why), style = PleosType.Caption, color = PleosColor.TextSecondary)
         Text(stringResource(R.string.reflect_flow), style = PleosType.Body)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             listOf(Flow.Smooth to R.string.flow_smooth, Flow.Okay to R.string.flow_okay, Flow.Awkward to R.string.flow_awkward).forEach { (flow, label) ->
@@ -543,6 +545,24 @@ private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event
         )
         if (known.isNotEmpty()) {
             Text(stringResource(R.string.reflect_known, known.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun ReflectedScreen(screen: Screen.Reflected, library: Library, send: (Event) -> Unit) {
+    val companion = library.nameOf(screen.riders.companion)
+    ScreenFrame(
+        title = stringResource(R.string.reflected_title),
+        note = stringResource(R.string.reflect_why),
+        actions = { PleosButton(stringResource(R.string.action_done), { send(Event.Done) }, style = ButtonStyle.Primary) },
+    ) {
+        Text(
+            stringResource(R.string.reflected_ride, companion, library.bond(screen.riders.pair).count),
+            style = PleosType.Body,
+        )
+        if (screen.discovered.isNotEmpty()) {
+            Text(stringResource(R.string.reflected_interests, screen.discovered.joinToString(", "), companion), style = PleosType.Body)
         }
     }
 }

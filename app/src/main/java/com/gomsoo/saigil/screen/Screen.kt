@@ -86,6 +86,8 @@ sealed interface Screen {
         val discovered: String = "",
         val problems: Set<Problem> = emptySet(),
     ) : Screen
+    /** Confirms a saved reflection; [discovered] are the interests just added to the companion. */
+    data class Reflected(val riders: Riders, val discovered: List<String>) : Screen
 }
 
 /** The app shows the driving screen over [screen] whenever [vehicle] is restricted. */
@@ -278,10 +280,16 @@ private fun step(screen: Screen, event: Event, library: Library, me: PersonId?, 
             is Event.EditText -> stay(screen.copy(discovered = event.text.take(TEXT_LIMIT)))
             Event.Submit -> when (val flow = screen.flow) {
                 null -> stay(screen.copy(problems = setOf(Problem.NoFlow)))
-                else -> Screen.Home to listOf(
-                    Effect.RecordRide(Ride(screen.riders.me, screen.riders.companion, stamp.now, flow, splitList(screen.discovered))),
-                )
+                else -> splitList(screen.discovered).let { discovered ->
+                    Screen.Reflected(screen.riders, discovered) to listOf(
+                        Effect.RecordRide(Ride(screen.riders.me, screen.riders.companion, stamp.now, flow, discovered)),
+                    )
+                }
             }
+            else -> stay(screen)
+        }
+        is Screen.Reflected -> when (event) {
+            Event.Back, Event.Done -> stay(Screen.Home)
             else -> stay(screen)
         }
     }
