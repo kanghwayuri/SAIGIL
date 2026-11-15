@@ -100,6 +100,7 @@ fun SaigilApp(ui: Ui, send: (Event) -> Unit) {
         is Screen.SavedTopics -> SavedTopicsScreen(screen, send)
         is Screen.Reflect -> ReflectScreen(screen, library, send)
         is Screen.Reflected -> ReflectedScreen(screen, library, send)
+        is Screen.PersonSaved -> PersonSavedScreen(screen, library, send)
     }
 }
 
@@ -545,6 +546,34 @@ private fun ReflectScreen(screen: Screen.Reflect, library: Library, send: (Event
         )
         if (known.isNotEmpty()) {
             Text(stringResource(R.string.reflect_known, known.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun PersonSavedScreen(screen: Screen.PersonSaved, library: Library, send: (Event) -> Unit) {
+    val name = library.nameOf(screen.person)
+    ScreenFrame(
+        title = stringResource(R.string.person_saved_title),
+        note = stringResource(R.string.person_saved_note, name),
+        actions = {
+            PleosButton(stringResource(R.string.person_saved_list), { send(Event.Done) })
+            PleosButton(stringResource(R.string.person_saved_topic), { send(Event.OpenSaveTopic) })
+            PleosButton(stringResource(R.string.person_saved_recommend), { send(Event.OpenRecommend) }, style = ButtonStyle.Primary)
+        },
+    ) {
+        val person = library.person(screen.person) ?: return@ScreenFrame
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(PleosColor.BackgroundSecondary).padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(person.name, style = PleosType.Body)
+            if (person.places.isNotEmpty()) {
+                Text(stringResource(R.string.people_places, person.places.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
+            }
+            if (person.interests.isNotEmpty()) {
+                Text(stringResource(R.string.people_interests, person.interests.joinToString(", ")), style = PleosType.Caption, color = PleosColor.TextSecondary)
+            }
         }
     }
 }
