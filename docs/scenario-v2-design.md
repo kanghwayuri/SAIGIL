@@ -20,7 +20,7 @@
 - `assets/schema.json`의 `actionCalls`는 최대 3개, description은 영어, 응답은 7초 안에 `APP_ACTION_RESPONSE` broadcast로 보냅니다.
 - LLM SDK는 공모전 금지이고 에뮬레이터 v2.1.0에서 제공이 끝났습니다.
 - NaviHelper에는 "지금 고속도로" 필드가 없습니다. `TBTInfo.type`의 `TURN_ENTER_IC_*`와 `RouteStateInfo`의 혼잡 구간으로 추정합니다. 에뮬레이터는 경로 주행을 시뮬레이션하지 못하므로 debug 트리거를 둡니다.
-- DO를 선언하지 않은 앱은 Parking에서만 화면을 쓸 수 있습니다. 주행 중 추천은 **음성으로만** 냅니다.
+- DO를 선언하지 않은 앱은 Parking에서만 화면을 쓸 수 있습니다. SAIGIL은 `MainActivity`에 `distractionOptimized`를 선언하고, 주행 중에는 터치할 곳이 없는 **주행 보드**만 그립니다. 추천은 음성으로 말하고 보드에 같은 내용을 크게 보여 줍니다.
 
 ## Data shape
 
@@ -80,7 +80,7 @@ data class Library(val people: List<Person>, val ties: List<Tie>, val topics: Li
 | --- | --- | --- | --- |
 | 2 주제 말하기 | `openers(topic, pair, library)` | 사용자가 말한 주제 | 서로 다른 접근 3장 (`Approach`: 질문하기, 내 경험 나누기, 함께 기뻐하기, 경청하기 중). 각 카드에 첫마디와 이어 가기 |
 | 3 맥락 말하기 | `topicsFor(context, pair, library)` | 지금 상황 한두 문장 | 저장된 화제 상위 3개와 고른 이유 |
-| 4 능동 추천 | `proactive(trigger, pair, library, recent)` | `LongDrive` 또는 `Jam` | 음성 한 문장. 저장 화제 → 요즘 화제 → 밸런스 게임 순으로, 같은 주행에서 이미 말한 것은 건너뜀 |
+| 4 능동 추천 | `proactive(situation, pair, library, said)` | `Situation.Highway(remainingKm)` 또는 `Situation.Jam(lengthM, avgSpeedKmh)` | `Suggestion` 하나(`SavedTopic`, `Trend`, `BalanceGame(a, b)`). 고속도로는 저장 화제 → 요즘 화제 → 밸런스 게임, 정체는 밸런스 게임 → 저장 화제 → 요즘 화제 순. 같은 주행에서 이미 말한 것은 건너뜀 |
 
 - 첫마디 템플릿은 손으로 쓴 catalog이고 `{topic}` 자리에 주제를 넣습니다. 상대를 부르는 말투는 me→companion `Tie`로 정합니다. 동승자가 내 `Parent`면 존댓말, 그 외에는 반말입니다.
 - `topicsFor`와 `proactive`는 **Pair(me, companion)에 속한 화제만** 봅니다. 누가 저장했든 같은 쌍이면 찾고, 다른 쌍의 화제는 나오지 않습니다.
@@ -108,11 +108,12 @@ Driving (주행 제한 중이면 어느 화면이든 이 화면. 입력 없음, 
 
 ## 주행 중 능동 추천 (`drive/`)
 
-- `RideCompanion`이 NaviHelper 신호를 `Trigger`로 바꿉니다.
-  - `LongDrive`: `onTBTInfo`에 `TURN_ENTER_IC_*`가 나타나 거리가 500 m 이하일 때.
-  - `Jam`: `RouteStateInfo` 혼잡 구간이 `SLOW`·`HEAVY`이고 offset이 300 m 이하일 때.
-  - debug: `adb shell am broadcast -a com.gomsoo.saigil.DEBUG_TRIGGER --es trigger LongDrive|Jam -p com.gomsoo.saigil`.
-- 같은 종류의 트리거는 10분에 한 번만 말합니다. active ride가 없으면 말하지 않습니다.
+- `RideCompanion`이 NaviHelper 신호를 `Situation`으로 바꿉니다.
+  - `Highway`: `onTBTInfo`에 `TURN_ENTER_IC_*`가 나타나 거리가 500 m 이하일 때. 남은 거리는 마지막 `onDrivingInfo`의 목적지 거리입니다.
+  - `Jam`: `RouteStateInfo` 혼잡 구간이 `SLOW`·`HEAVY`이고 offset이 300 m 이하일 때. 구간 길이와 평균 속도를 담습니다.
+  - debug: `adb shell am broadcast -a com.gomsoo.saigil.DEBUG_TRIGGER --es trigger LongDrive|Jam [--ei remaining_km 42] [--ei jam_m 2300 --ei avg_kmh 12] -p com.gomsoo.saigil`.
+- `Drive`가 앱 범위 `StateFlow<DriveBoard(situation, latest)>`를 냅니다. 상황은 신호가 올 때마다 바뀌고, `latest`는 실제로 말한 추천입니다. 주행 보드가 이 값을 그립니다.
+- 같은 종류의 상황은 10분에 한 번만 말합니다. active ride가 없으면 말하지 않습니다.
 - 말하기는 TextToSpeech SDK `Mode.ON_DEVICE`, `Locale.KOREA`.
 
 ## Gleo function (`assets/schema.json`, component `service`)

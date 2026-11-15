@@ -92,7 +92,7 @@ classDiagram
         <<functions>>
         +openers(topic, Riders, Library) List~Opener~
         +topicsFor(context, Riders, Library, now) List~TopicPick~
-        +proactive(Trigger, Riders, Library, said, now) Suggestion?
+        +proactive(Situation, Riders, Library, said, now) Suggestion?
     }
     class Opener {
         +Approach approach
@@ -103,24 +103,34 @@ classDiagram
         +Topic topic
         +List~Reason~ reasons
     }
+    class Situation {
+        <<sealed>>
+        Highway(remainingKm?)
+        Jam(lengthM?, avgSpeedKmh?)
+    }
     class Suggestion {
+        <<sealed>>
         +String key
         +String sentence
+        SavedTopic(id, text)
+        Trend(text)
+        BalanceGame(a, b)
     }
     class Catalog {
         <<data>>
         openerTemplates: Approach x 2
         trending: 8
-        balanceGames: 10
+        balanceGames: 10 pairs
     }
     Recommend --> Catalog
     Recommend --> Opener
     Recommend --> TopicPick
     Recommend --> Suggestion
+    Recommend --> Situation
 ```
 
 - `topicsFor`와 `proactive`는 `Riders.pair`의 화제만 봅니다. `topicsFor`는 한글 글자 bigram 겹침(맥락 x3), 동승자 관심사·장소 겹침(+1), 3일 안에 쓴 화제(-2)로 점수를 냅니다.
-- `proactive`는 저장 화제 → 요즘 이야깃거리 → 밸런스 게임 순서이고, `said`에 있는 key는 건너뜁니다.
+- `proactive`는 `Highway`면 저장 화제 → 요즘 이야깃거리 → 밸런스 게임, `Jam`이면 밸런스 게임 → 저장 화제 → 요즘 이야깃거리 순서이고, `said`에 있는 key는 건너뜁니다. 소리 내어 말하는 문장은 `Situation.lead`와 `Suggestion.sentence`를 이어 붙입니다.
 
 ## 3. 화면 (`screen/`, `ui/`)
 
@@ -176,7 +186,7 @@ classDiagram
 
 - reducer는 순수 함수입니다. 시각과 새 id는 `Stamp`로 받고, 저장·음성 인식·active ride는 `Effect`로 돌려줍니다.
 - `TopicCapture`와 `Listen`은 `Capture(stt, text)`를 가집니다. `stt`는 `Idle | Listening(partial) | Failed(reason)`이고, 전사 결과는 `text`에 들어가 사용자가 고칠 수 있습니다.
-- 주행 제한(`Restriction.Restricted`)이면 UI는 어느 화면이든 Driving 안내를 그리고, reducer는 입력 이벤트를 무시하며 듣기를 멈춥니다. 주차하면 원래 화면으로 돌아옵니다.
+- 주행 제한(`Restriction.Restricted`)이면 UI는 어느 화면이든 주행 보드(`DriveBoard`)를 그리고, reducer는 입력 이벤트를 무시하며 듣기를 멈춥니다. 주차하면 원래 화면으로 돌아옵니다.
 
 ## 4. 주행 중 능동 추천 (`drive/`)
 
@@ -186,6 +196,7 @@ classDiagram
         +LibraryStore store
         +MutableStateFlow~PersonId?~ me
         +Rides rides
+        +Drive drive
         +RideCompanion companion
     }
     class Rides {
@@ -199,26 +210,33 @@ classDiagram
     }
     class RideCompanion {
         +start()
-        +onTrigger(Trigger)
+        +onSituation(Situation)
     }
-    class decide {
-        <<function>>
-        (Trigger, ActiveRide?, Library, spokenAt, now) Decision
+    class Drive {
+        +StateFlow~DriveBoard~ board
+        +on(Situation, now) Decision
+    }
+    class DriveBoard {
+        +Situation? situation
+        +Suggestion? latest
     }
     class DebugTriggerReceiver {
         <<debug only>>
     }
     SaigilApplication --> Rides
     SaigilApplication --> RideCompanion
+    SaigilApplication --> Drive
     Rides --> ActiveRide
-    RideCompanion --> decide
-    RideCompanion --> NaviHelper : onTBTInfo, onRouteStateInfo
+    RideCompanion --> Drive
+    Drive --> Rides
+    Drive --> DriveBoard
+    RideCompanion --> NaviHelper : onTBTInfo, onRouteStateInfo, onDrivingInfo
     RideCompanion --> TextToSpeech : ON_DEVICE, ko-KR
     DebugTriggerReceiver --> RideCompanion
 ```
 
-- `longDriveFrom`: 첫 TBT가 `TURN_ENTER_IC_*`이고 500 m 이내면 `LongDrive`. `jamFrom`: `SLOW`·`HEAVY` 정체가 300 m 이내면 `Jam`.
-- `decide`는 active ride가 없으면 `NoRide`, 같은 종류를 10분 안에 말했으면 `CoolingDown`입니다.
+- `highwayFrom`: 첫 TBT가 `TURN_ENTER_IC_*`이고 500 m 이내면 `Highway`. `jamFrom`: `SLOW`·`HEAVY` 정체가 300 m 이내면 `Jam`.
+- `Drive.on`은 먼저 보드의 상황을 바꾸고, active ride가 없으면 `NoRide`, 같은 종류를 10분 안에 말했으면 `CoolingDown`입니다. 말하면 `latest`를 바꿉니다.
 - active ride는 프로세스 메모리에만 있습니다. 첫 `BeginRide` 때 NaviHelper와 TTS를 연결합니다.
 
 ## 5. Gleo AI (`gleo/`)
