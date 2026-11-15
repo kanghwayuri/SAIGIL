@@ -7,7 +7,6 @@ import ai.pleos.playground.navi.data.TrafficCongestionInfo
 import com.gomsoo.saigil.library.Library
 import com.gomsoo.saigil.library.Person
 import com.gomsoo.saigil.library.PersonId
-import com.gomsoo.saigil.library.Relation
 import com.gomsoo.saigil.library.Riders
 import com.gomsoo.saigil.recommend.Trigger
 import org.junit.Assert.assertEquals
@@ -18,10 +17,10 @@ import org.junit.Test
 
 class CompanionTest {
 
-    private val me = Person(PersonId("me"), "지수", Relation.Me)
-    private val friend = Person(PersonId("f"), "민호", Relation.Friend)
+    private val me = Person(PersonId("me"), "지수")
+    private val friend = Person(PersonId("f"), "민호")
     private val library = Library(people = listOf(me, friend))
-    private val ride = ActiveRide(Riders(me.id, friend.id))
+    private val ride = ActiveRide(Riders.of(me.id, friend.id)!!)
 
     private fun congestion(offset: Double, type: TrafficCongestionType) =
         TrafficCongestionInfo(offset, 1200.0, 300, type, 12.0, "경부고속도로", "서초IC", "양재IC")
