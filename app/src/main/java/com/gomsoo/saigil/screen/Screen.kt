@@ -295,16 +295,18 @@ private fun listen(capture: Capture, event: Event): Pair<Capture, List<Effect>>?
         capture.copy(stt = Stt.Listening("")) to listOf(Effect.StartListening)
     }
     is Event.EditText -> capture.copy(text = event.text.take(TEXT_LIMIT)) to emptyList()
-    is Event.Speech -> if (capture.stt !is Stt.Listening) {
-        capture to emptyList()
-    } else {
-        when (val heard = event.heard) {
-            is Heard.Partial -> capture.copy(stt = Stt.Listening(heard.text))
-            is Heard.Final -> Capture(Stt.Idle, heard.text.trim().take(TEXT_LIMIT))
-            is Heard.Failed -> capture.copy(stt = Stt.Failed(heard.reason))
-            Heard.Ended -> capture.copy(stt = Stt.Idle)
-        } to emptyList()
-    }
+    is Event.Speech -> when (val heard = event.heard) {
+        // The Pleos recognizer reports Ended before the final text, so the final text is kept whenever it arrives.
+        is Heard.Final -> Capture(Stt.Idle, heard.text.trim().take(TEXT_LIMIT))
+        else -> when (val stt = capture.stt) {
+            !is Stt.Listening -> capture
+            else -> when (heard) {
+                is Heard.Partial -> capture.copy(stt = Stt.Listening(heard.text))
+                is Heard.Failed -> capture.copy(stt = Stt.Failed(heard.reason))
+                else -> Capture(Stt.Idle, stt.partial.trim().ifBlank { capture.text }.take(TEXT_LIMIT))
+            }
+        }
+    } to emptyList()
     else -> null
 }
 
