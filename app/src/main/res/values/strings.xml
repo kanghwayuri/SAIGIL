@@ -71,9 +71,9 @@
     <string name="relation_change">관계 바꾸기</string>
 
     <string name="input_title">무엇을 말할까요?</string>
-    <string name="input_topic">주제 말하기</string>
+    <string name="input_topic">하고 싶은 이야기가 있어요</string>
     <string name="input_topic_body">꺼내고 싶은 주제가 있어요. 어떻게 시작할지 추천해 드려요.</string>
-    <string name="input_context">맥락 말하기</string>
+    <string name="input_context">무슨 이야기를 할지 모르겠어요</string>
     <string name="input_context_body">지금 상황을 말하면 저장한 화제 중에서 골라 드려요.</string>
 
     <string name="listen_topic_title">어떤 주제로 이야기하고 싶나요?</string>
