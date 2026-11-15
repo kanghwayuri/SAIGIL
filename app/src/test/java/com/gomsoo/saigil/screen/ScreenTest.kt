@@ -64,6 +64,19 @@ class ScreenTest {
     }
 
     @Test
+    fun `a new companion profile leads straight into a recommendation with that person`() {
+        startAs(dad, dad)
+        send(Event.OpenPeople, Event.AddPerson, Event.EditDraft(PersonDraft(name = "김현대")), Event.Submit)
+        val hyundai = library.people.single { it.name == "김현대" }
+        assertEquals(Screen.PersonSaved(dad.id, hyundai.id), model.screen)
+
+        send(Event.OpenRecommend)
+        val pick = screen<Screen.PickCompanion>()
+        assertEquals(Purpose.Recommend, pick.purpose)
+        assertEquals(hyundai.id, pick.companion)
+    }
+
+    @Test
     fun `picking a profile makes it the user, and the user can change later`() {
         startAs(mom, dad, mom)
         assertEquals(mom.id, me)

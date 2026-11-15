@@ -86,6 +86,8 @@ sealed interface Screen {
         val discovered: String = "",
         val problems: Set<Problem> = emptySet(),
     ) : Screen
+    /** Shown once after a new companion profile is saved, to lead straight into a first recommendation. */
+    data class PersonSaved(val me: PersonId, val person: PersonId) : Screen
     /** Confirms a saved reflection; [discovered] are the interests just added to the companion. */
     data class Reflected(val riders: Riders, val discovered: List<String>) : Screen
 }
@@ -223,7 +225,13 @@ private fun step(screen: Screen, event: Event, library: Library, me: PersonId?, 
         is Screen.PersonEdit -> when (event) {
             Event.Back -> stay(if (screen.forMe) Screen.WhoAmI else Screen.People)
             is Event.EditDraft -> stay(screen.copy(draft = event.draft.limited(), problems = emptySet()))
-            Event.Submit -> savePerson(screen, stamp)
+            Event.Submit -> savePerson(screen, me, stamp)
+            else -> stay(screen)
+        }
+        is Screen.PersonSaved -> when (event) {
+            Event.OpenRecommend -> stay(Screen.PickCompanion(Purpose.Recommend, screen.me, screen.person))
+            Event.OpenSaveTopic -> stay(Screen.PickCompanion(Purpose.SaveTopic, screen.me, screen.person))
+            Event.Back, Event.Done -> stay(Screen.People)
             else -> stay(screen)
         }
         is Screen.PickCompanion -> when (event) {
@@ -345,7 +353,7 @@ private fun recommend(screen: Screen.Listen, library: Library, stamp: Stamp): St
     return result to stopIfListening(screen.capture) + Effect.BeginRide(screen.riders)
 }
 
-private fun savePerson(screen: Screen.PersonEdit, stamp: Stamp): Step {
+private fun savePerson(screen: Screen.PersonEdit, me: PersonId?, stamp: Stamp): Step {
     val draft = screen.draft
     if (draft.name.isBlank()) return stay(screen.copy(problems = setOf(Problem.NoName)))
     val person = Person(
@@ -354,11 +362,12 @@ private fun savePerson(screen: Screen.PersonEdit, stamp: Stamp): Step {
         places = splitList(draft.places),
         interests = splitList(draft.interests),
     )
-    return if (screen.forMe) {
-        Screen.Home to listOf(Effect.PutPerson(person), Effect.BecomeMe(person.id))
-    } else {
-        Screen.People to listOf(Effect.PutPerson(person))
+    val next = when {
+        screen.forMe -> return Screen.Home to listOf(Effect.PutPerson(person), Effect.BecomeMe(person.id))
+        draft.id == null && me != null && me != person.id -> Screen.PersonSaved(me, person.id)
+        else -> Screen.People
     }
+    return next to listOf(Effect.PutPerson(person))
 }
 
 private fun Person.toDraft() = PersonDraft(id, name, places.joinToString(", "), interests.joinToString(", "))
