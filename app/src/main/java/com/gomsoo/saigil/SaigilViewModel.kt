@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gomsoo.saigil.drive.ActiveRide
+import com.gomsoo.saigil.drive.DriveBoard
 import com.gomsoo.saigil.library.Library
 import com.gomsoo.saigil.library.PersonId
 import com.gomsoo.saigil.screen.Effect
@@ -22,7 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-data class Ui(val model: Model, val library: Library, val ride: ActiveRide?, val me: PersonId?)
+data class Ui(val model: Model, val library: Library, val ride: ActiveRide?, val me: PersonId?, val board: DriveBoard)
 
 class SaigilViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -31,8 +32,8 @@ class SaigilViewModel(application: Application) : AndroidViewModel(application) 
     private val speech: SpeechInput = PleosSpeechInput(application)
     private val model = MutableStateFlow(Model())
 
-    val ui: StateFlow<Ui> = combine(model, store.library, app.rides.active, app.me, ::Ui)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, Ui(model.value, store.library.value, app.rides.active.value, null))
+    val ui: StateFlow<Ui> = combine(model, store.library, app.rides.active, app.me, app.drive.board, ::Ui)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Ui(model.value, store.library.value, app.rides.active.value, null, app.drive.board.value))
 
     init {
         // A new screen model starts at "who am I", so the user is unknown again. A configuration change keeps both.
