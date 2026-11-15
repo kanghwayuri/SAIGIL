@@ -17,6 +17,8 @@ captures/
 .externalNativeBuild/
 .cxx/
 *.apk
+# The contest submission APK is committed on purpose.
+!apk/*.apk
 output.json
 
 # IntelliJ
@@ -29,6 +31,7 @@ render.experimental.xml
 # Keystore files
 *.jks
 *.keystore
+keystore.properties
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json

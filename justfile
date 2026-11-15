@@ -13,7 +13,7 @@ build: (_build "false")
 build-app:
     ./gradlew :app:assembleDebug
 
-# release 앱 빌드 (signingConfig가 없어 unsigned APK가 나옴)
+# release 앱 빌드 (루트에 keystore.properties가 있으면 release 키로 서명, 없으면 unsigned)
 [group('build')]
 build-release:
     ./gradlew :app:assembleRelease
