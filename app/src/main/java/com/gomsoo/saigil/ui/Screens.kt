@@ -199,7 +199,7 @@ private fun WhoAmIScreen(ui: Ui, send: (Event) -> Unit) {
             )
         },
     ) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             people.forEach { person ->
                 ChoiceOption(person.name, ui.me == person.id, { send(Event.ChooseMe(person.id)) }, Modifier.widthIn(min = 200.dp))
             }
