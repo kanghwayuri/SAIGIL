@@ -36,7 +36,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -46,11 +45,11 @@ import com.gomsoo.saigil.ui.theme.PleosType
 
 enum class ButtonStyle { Primary, Secondary }
 
-/** ivi_basic_button sizes. */
+/** ivi_basic_button sizes, enlarged so the app's body and caption text fit. */
 enum class ButtonSize(val height: Dp, val radius: Dp, val paddingH: Dp, val minWidth: Dp, val text: TextStyle) {
-    Large(88.dp, 28.dp, 36.dp, 140.dp, PleosType.BodyLarge),
-    Medium(72.dp, 22.dp, 28.dp, 120.dp, PleosType.BodySmall),
-    Small(60.dp, 16.dp, 22.dp, 100.dp, PleosType.LabelMedium),
+    Large(96.dp, 28.dp, 40.dp, 160.dp, PleosType.Body),
+    Medium(80.dp, 22.dp, 32.dp, 140.dp, PleosType.Body),
+    Small(64.dp, 16.dp, 24.dp, 110.dp, PleosType.Caption),
 }
 
 @Composable
@@ -100,7 +99,7 @@ fun PleosButton(
 fun ErrorText(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        style = PleosType.LabelMedium,
+        style = PleosType.Caption,
         color = PleosColor.Error,
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
     )
@@ -121,7 +120,7 @@ fun ChoiceOption(text: String, selected: Boolean, onSelect: () -> Unit, modifier
             .padding(horizontal = 32.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = PleosType.BodyLarge, color = if (selected) PleosColor.TextOnFilled else PleosColor.TextPrimary, textAlign = TextAlign.Center)
+        Text(text, style = PleosType.Body, color = if (selected) PleosColor.TextOnFilled else PleosColor.TextPrimary, textAlign = TextAlign.Center)
     }
 }
 
@@ -165,15 +164,15 @@ fun LabeledField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
-        textStyle = PleosType.BodyMedium.copy(fontWeight = FontWeight.Normal),
-        label = { Text("$label ($marker)", style = PleosType.LabelMedium) },
+        textStyle = PleosType.Body,
+        label = { Text("$label ($marker)", style = PleosType.Caption) },
         supportingText = {
             Row(Modifier.fillMaxWidth()) {
                 if (error != null) ErrorText(error, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(16.dp))
                 Text(
                     stringResource(R.string.action_char_count, value.length, limit),
-                    style = PleosType.LabelSmall,
+                    style = PleosType.Caption,
                     color = PleosColor.TextTertiary,
                 )
             }
