@@ -2,16 +2,13 @@ package com.gomsoo.saigil.recommend
 
 import com.gomsoo.saigil.library.Flow
 import com.gomsoo.saigil.library.Library
-import com.gomsoo.saigil.library.Register
 import com.gomsoo.saigil.library.Riders
 import com.gomsoo.saigil.library.Topic
-import com.gomsoo.saigil.library.register
 
 data class Opener(val approach: Approach, val first: String, val followUp: String)
 
 sealed interface Reason {
     data object MatchesContext : Reason
-    data class AboutPassenger(val name: String) : Reason
     data class SharesInterest(val interest: String) : Reason
 }
 
@@ -24,14 +21,14 @@ data class Suggestion(val key: String, val sentence: String)
 
 private const val RECENT_MS = 3L * 24 * 60 * 60 * 1000
 
-/** Three different ways to open [topic], in the register the user uses with the passenger. */
+/** Three different ways to open [topic], in the register the user uses with the companion. */
 fun openers(topic: String, riders: Riders, library: Library): List<Opener> {
-    val passenger = library.person(riders.passenger)
-    val register = passenger?.relation?.register ?: Register.Casual
-    val bond = library.bond(riders)
+    val companion = library.person(riders.companion)
+    val register = library.register(riders)
+    val bond = library.bond(riders.pair)
     val order = when {
         bond.lastFlow == Flow.Awkward -> listOf(Approach.Ask, Approach.Celebrate, Approach.Listen, Approach.ShareMine)
-        passenger != null && passenger.interests.any { shared(topic, it) > 0 } ->
+        companion != null && companion.interests.any { shared(topic, it) > 0 } ->
             listOf(Approach.Listen, Approach.Ask, Approach.Celebrate, Approach.ShareMine)
         else -> listOf(Approach.Ask, Approach.ShareMine, Approach.Celebrate, Approach.Listen)
     }
@@ -42,7 +39,7 @@ fun openers(topic: String, riders: Riders, library: Library): List<Opener> {
     }
 }
 
-/** The saved topics that fit [context] best for this passenger, at most three. */
+/** The topics saved for this pair that fit [context] best, at most three. */
 fun topicsFor(context: String, riders: Riders, library: Library, now: Long): List<TopicPick> =
     ranked(context, riders, library, now).take(3)
 
@@ -53,7 +50,6 @@ fun proactive(trigger: Trigger, riders: Riders, library: Library, said: Set<Stri
         Trigger.Jam -> "길이 막히네요."
     }
     val saved = ranked("", riders, library, now)
-        .filter { it.topic.about.isEmpty() || riders.passenger in it.topic.about }
         .map { Suggestion("topic:${it.topic.id.value}", "$lead 저장해 둔 화제 하나 꺼내 볼까요? ${it.topic.text}") }
     val trends = trending.mapIndexed { i, text -> Suggestion("trend:$i", "$lead 요즘 이야깃거리 하나 어때요? $text") }
     val games = balanceGames.mapIndexed { i, text -> Suggestion("balance:$i", "$lead 가볍게 밸런스 게임 해 볼까요? $text") }
@@ -61,9 +57,9 @@ fun proactive(trigger: Trigger, riders: Riders, library: Library, said: Set<Stri
 }
 
 private fun ranked(context: String, riders: Riders, library: Library, now: Long): List<TopicPick> {
-    val passenger = library.person(riders.passenger)
-    val likes = passenger?.let { it.interests + it.places }.orEmpty()
-    return library.topics
+    val companion = library.person(riders.companion)
+    val likes = companion?.let { it.interests + it.places }.orEmpty()
+    return library.topicsOf(riders.pair)
         .map { topic ->
             val reasons = mutableListOf<Reason>()
             var score = 0
@@ -75,12 +71,6 @@ private fun ranked(context: String, riders: Riders, library: Library, now: Long)
             likes.firstOrNull { shared(topic.text, it) > 0 }?.let {
                 score += 1
                 reasons += Reason.SharesInterest(it)
-            }
-            if (passenger != null && passenger.id in topic.about) {
-                score += 2
-                reasons += Reason.AboutPassenger(passenger.name)
-            } else if (topic.about.isNotEmpty()) {
-                score -= 1
             }
             if (topic.usedAt != null && now - topic.usedAt < RECENT_MS) score -= 2
             Triple(topic, reasons.toList(), score)
